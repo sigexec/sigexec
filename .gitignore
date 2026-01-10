@@ -210,3 +210,10 @@ __marimo__/
 *.png
 *.jpg
 *.jpeg
+
+# Staticdash generated dashboard output (built by CI/CD)
+docs/index.html
+docs/assets/
+docs/radar-processing/
+docs/custom-blocks-tutorial/
+docs/*-dashboard/

@@ -1,14 +1,25 @@
 # SigChain - Signal Processing Chain Framework
 
-A Python framework for building signal processing pipelines using Directed Acyclic Graphs (DAGs) and data classes. This project demonstrates radar signal processing with Linear Frequency Modulated (LFM) signals, including range and Doppler compression.
+A Python framework for building signal processing pipelines using Directed Acyclic Graphs (DAGs) and data classes. 
+
+**SigChain provides the framework - you bring the blocks!** The included radar processing blocks are examples showing how to use the framework. You can easily create your own custom blocks for any signal processing application.
+
+## Quick Links
+
+📖 **Want to create your own blocks?** → [Custom Blocks Guide](docs/CUSTOM_BLOCKS.md)  
+🔧 **Quick Reference** → [Plugin Reference](docs/PLUGIN_REFERENCE.md)  
+🏗️ **Architecture Overview** → [Architecture Guide](docs/ARCHITECTURE.md)  
+💡 **See Examples** → [Custom Blocks Example](examples/custom_blocks_example.py)  
+🎯 **Interactive Demos** → [Live Dashboards](https://briday1.github.io/sigchain/) *(Auto-deployed via CI/CD)*
 
 ## Features
 
 - **Clean DAG Architecture**: Build pipelines where a single object (SignalData) flows through processing stages
 - **Data Class Blocks**: Type-safe, composable processing blocks using Python dataclasses
+- **Extensible**: Create custom blocks as simple dataclasses - no complex interfaces required
 - **Functional Composition**: Chain operations naturally with consistent input/output types
 - **Flexible API**: Multiple usage patterns from explicit chaining to pipeline builders
-- **Radar Processing Pipeline**: Complete example with:
+- **Example Application**: Complete radar processing pipeline demonstrating:
   - LFM signal generation with delay and Doppler shift
   - Pulse stacking
   - Matched filtering (range compression)
@@ -268,7 +279,7 @@ result = process(LFMGenerator()())
 
 ## Creating Custom Blocks
 
-Create your own processing blocks as data classes:
+**SigChain is designed to be extended!** The included radar blocks are examples - create your own blocks for any domain:
 
 ```python
 from dataclasses import dataclass
@@ -294,24 +305,58 @@ class MyCustomBlock:
             metadata=metadata
         )
 
-# Use it
+# Use it with built-in or other custom blocks
 my_block = MyCustomBlock(param1=2.5)
 result = my_block(input_signal)
 ```
 
+### Distributing Custom Blocks
+
+You can create and distribute your own block packages:
+
+```python
+# Your package: my_signal_blocks
+from sigchain import Pipeline
+from my_signal_blocks import CustomFilter, CustomTransform
+
+result = (Pipeline("MyPipeline")
+    .add(CustomFilter(cutoff=1000))
+    .add(CustomTransform(mode='advanced'))
+    .run()
+)
+```
+
+**Learn more:**
+- **[Creating Custom Blocks Guide](docs/CUSTOM_BLOCKS.md)** - Complete guide with examples
+- **[examples/custom_blocks_example.py](examples/custom_blocks_example.py)** - Working examples
+
 ## Documentation
 
+- **[CUSTOM_BLOCKS.md](docs/CUSTOM_BLOCKS.md)** - ⭐ Guide to creating and distributing custom blocks
 - **[CLEAN_DAG.md](docs/CLEAN_DAG.md)** - Comprehensive guide to the data class approach
 - **[examples/](examples/)** - Working examples with different patterns
 - **[tests/](tests/)** - Unit tests for all components
 
 ## Design Philosophy
 
-1. **Type Safety**: Same type (`SignalData`) throughout the pipeline
-2. **Composability**: Blocks can be combined in any order
-3. **Clarity**: Configuration separate from execution
-4. **Immutability**: Each block returns new data
-5. **Simplicity**: Minimal API surface, maximum flexibility
+1. **Framework First**: SigChain provides the framework; you provide the blocks
+2. **Type Safety**: Same type (`SignalData`) throughout the pipeline
+3. **Composability**: Blocks can be combined in any order
+4. **Extensibility**: Easy to create and distribute custom blocks
+5. **Clarity**: Configuration separate from execution
+6. **Immutability**: Each block returns new data
+7. **Simplicity**: Minimal API surface, maximum flexibility
+
+## Extensibility
+
+The radar processing blocks included in `sigchain.blocks` are **examples** demonstrating the framework. The framework is designed to support:
+
+- **Any signal processing domain**: Audio, video, communications, radar, medical imaging, etc.
+- **Custom block packages**: Distribute your blocks as separate Python packages
+- **Third-party blocks**: Use blocks from other packages with full framework integration
+- **Domain-specific pipelines**: Build specialized processing chains for your application
+
+See [CUSTOM_BLOCKS.md](docs/CUSTOM_BLOCKS.md) for a complete guide on creating and distributing custom blocks.
 
 ## Contributing
 
