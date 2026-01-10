@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SigChain - Interactive Demos</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 60px 40px;
+            text-align: center;
+        }
+        
+        header h1 {
+            font-size: 3em;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+        
+        header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+        
+        .content {
+            padding: 60px 40px;
+        }
+        
+        .intro {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+        
+        .intro h2 {
+            font-size: 2em;
+            margin-bottom: 20px;
+            color: #667eea;
+        }
+        
+        .intro p {
+            font-size: 1.1em;
+            color: #666;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        .demos {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin-bottom: 60px;
+        }
+        
+        .demo-card {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 30px;
+            transition: transform 0.3s, box-shadow 0.3s;
+            border: 2px solid transparent;
+        }
+        
+        .demo-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+            border-color: #667eea;
+        }
+        
+        .demo-card h3 {
+            font-size: 1.5em;
+            margin-bottom: 15px;
+            color: #333;
+        }
+        
+        .demo-card p {
+            color: #666;
+            margin-bottom: 20px;
+        }
+        
+        .demo-card ul {
+            list-style: none;
+            margin-bottom: 20px;
+        }
+        
+        .demo-card ul li {
+            padding: 8px 0;
+            color: #555;
+        }
+        
+        .demo-card ul li:before {
+            content: "✓ ";
+            color: #667eea;
+            font-weight: bold;
+        }
+        
+        .btn {
+            display: inline-block;
+            padding: 12px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 600;
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .features {
+            background: #f8f9fa;
+            padding: 40px;
+            border-radius: 8px;
+            margin-bottom: 40px;
+        }
+        
+        .features h2 {
+            font-size: 1.8em;
+            margin-bottom: 20px;
+            color: #667eea;
+        }
+        
+        .features ul {
+            list-style: none;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+        }
+        
+        .features li {
+            padding: 15px;
+            background: white;
+            border-radius: 6px;
+            border-left: 4px solid #667eea;
+        }
+        
+        footer {
+            text-align: center;
+            padding: 40px;
+            background: #f8f9fa;
+            color: #666;
+        }
+        
+        footer a {
+            color: #667eea;
+            text-decoration: none;
+        }
+        
+        footer a:hover {
+            text-decoration: underline;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            background: #667eea;
+            color: white;
+            border-radius: 12px;
+            font-size: 0.85em;
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎯 SigChain</h1>
+            <p>Interactive Signal Processing Demonstrations</p>
+        </header>
+        
+        <div class="content">
+            <div class="intro">
+                <h2>Explore Signal Processing Pipelines</h2>
+                <p>
+                    These interactive demonstrations showcase the SigChain framework for building 
+                    signal processing pipelines. Each demo features interactive Plotly visualizations 
+                    that let you explore the data at every processing stage.
+                </p>
+            </div>
+            
+            <div class="demos">
+                <div class="demo-card">
+                    <h3>🔬 Radar Processing Pipeline <span class="badge">Complete</span></h3>
+                    <p>
+                        A comprehensive end-to-end demonstration of radar signal processing, 
+                        from LFM waveform generation through to range-Doppler map creation.
+                    </p>
+                    <ul>
+                        <li>LFM Signal Generation</li>
+                        <li>Pulse Stacking Visualization</li>
+                        <li>Range Compression (Matched Filtering)</li>
+                        <li>Doppler Processing (FFT)</li>
+                        <li>Range-Doppler Map with Target Detection</li>
+                    </ul>
+                    <a href="demo/index.html" class="btn">View Demo →</a>
+                </div>
+                
+                <div class="demo-card">
+                    <h3>🛠️ Custom Processing Demo <span class="badge">Tutorial</span></h3>
+                    <p>
+                        Learn how to create custom processing blocks and integrate them 
+                        with the SigChain framework. Shows the pattern for building your own demos.
+                    </p>
+                    <ul>
+                        <li>Custom Block Creation</li>
+                        <li>Signal Generation</li>
+                        <li>Threshold Processing</li>
+                        <li>Interactive Visualizations</li>
+                        <li>Dashboard Integration</li>
+                    </ul>
+                    <a href="custom_demo/index.html" class="btn">View Tutorial →</a>
+                </div>
+            </div>
+            
+            <div class="features">
+                <h2>Framework Features</h2>
+                <ul>
+                    <li><strong>🎨 Interactive Plots</strong><br>Powered by Plotly for rich, interactive visualizations</li>
+                    <li><strong>🔧 Extensible</strong><br>Create custom blocks with simple dataclasses</li>
+                    <li><strong>⚡ Pipeline Architecture</strong><br>Clean, composable processing stages</li>
+                    <li><strong>📊 Type Safe</strong><br>Consistent SignalData throughout pipeline</li>
+                    <li><strong>🚀 Easy to Use</strong><br>No complex interfaces or registration required</li>
+                    <li><strong>📈 Automatic Memoization</strong><br>Efficient branching and parameter sweeps</li>
+                </ul>
+            </div>
+            
+            <div style="text-align: center; padding: 20px;">
+                <h2 style="margin-bottom: 20px;">Ready to Build Your Own?</h2>
+                <p style="margin-bottom: 30px; font-size: 1.1em; color: #666;">
+                    Check out the documentation and examples to create your own signal processing pipelines.
+                </p>
+                <a href="https://github.com/briday1/sigchain" class="btn" style="margin-right: 15px;">
+                    📚 View on GitHub
+                </a>
+                <a href="CUSTOM_BLOCKS.html" class="btn" style="background: linear-gradient(135deg, #43cea2 0%, #185a9d 100%);">
+                    📖 Read Documentation
+                </a>
+            </div>
+        </div>
+        
+        <footer>
+            <p>
+                <strong>SigChain</strong> - A Python framework for building signal processing pipelines<br>
+                <a href="https://github.com/briday1/sigchain">GitHub Repository</a> | 
+                <a href="../README.md">Documentation</a> | 
+                <a href="https://github.com/briday1/sigchain/issues">Report Issues</a>
+            </p>
+            <p style="margin-top: 20px; font-size: 0.9em;">
+                Created with ❤️ using SigChain, Plotly, and Staticdash
+            </p>
+        </footer>
+    </div>
+</body>
+</html>
