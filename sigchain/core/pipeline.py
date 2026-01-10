@@ -5,45 +5,84 @@ This module provides a cleaner, more functional approach to building
 signal processing pipelines using method chaining and lambda functions.
 """
 
-from typing import Callable, Optional, List, Any, Dict
+from typing import Callable, Optional, List, Any, Dict, Tuple
+import hashlib
+import pickle
 from .data import SignalData
 from .block import ProcessingBlock
 
 
 class Pipeline:
     """
-    Fluent pipeline for signal processing with method chaining.
+    Fluent pipeline for signal processing with method chaining and memoization.
     
     This class provides a cleaner, more DAG-like interface where you can:
     - Chain operations fluently
     - Use lambda functions for custom operations
     - Modify a single SignalData object through the pipeline
     - Specify dependencies implicitly through chaining
+    - Branch pipelines with automatic memoization (shared stages run once)
+    - Create variants with different configurations
+    
+    Memoization means if you create two pipelines that share common initial stages,
+    those stages only execute once and the result is cached:
     
     Example:
-        >>> pipeline = (Pipeline()
-        ...     .add(lambda sig: generate_signal(sig))
-        ...     .add(lambda sig: stack_pulses(sig))
-        ...     .add(lambda sig: matched_filter(sig))
-        ...     .add(lambda sig: doppler_fft(sig)))
-        >>> result = pipeline.run(initial_data)
+        >>> base = Pipeline().add(gen).add(stack).add(compress_range)
+        >>> branch1 = base.branch().add(doppler_hann)
+        >>> branch2 = base.branch().add(doppler_hamming)
+        >>> 
+        >>> # When you run branch1, it executes gen -> stack -> compress_range
+        >>> result1 = branch1.run()
+        >>> 
+        >>> # When you run branch2, it reuses the cached result after compress_range!
+        >>> result2 = branch2.run()  # Only executes doppler_hamming
     """
     
-    def __init__(self, name: str = "Pipeline"):
+    # Class-level cache shared across all pipeline instances
+    _global_cache: Dict[str, SignalData] = {}
+    
+    def __init__(self, name: str = "Pipeline", enable_cache: bool = True):
         """
         Initialize a new pipeline.
         
         Args:
             name: Optional name for the pipeline
+            enable_cache: Whether to enable memoization (default: True)
         """
         self.name = name
         self.operations: List[Dict[str, Any]] = []
-        self._cached_result: Optional[SignalData] = None
+        self._enable_cache = enable_cache
+        self._intermediate_results: List[SignalData] = []
+        self._parent_pipeline: Optional['Pipeline'] = None
+    
+    def _get_cache_key(self, up_to_index: int) -> str:
+        """
+        Generate a cache key for operations up to a certain index.
+        
+        Args:
+            up_to_index: Index of operations to include in key
+            
+        Returns:
+            Cache key string
+        """
+        # Create a key based on operation names and their configuration
+        # We use operation names as a simple hash
+        ops_repr = []
+        for i in range(min(up_to_index + 1, len(self.operations))):
+            op = self.operations[i]
+            # Try to get a repr of the function
+            func_name = op.get('name', f"op{i}")
+            ops_repr.append(func_name)
+        
+        key = "->".join(ops_repr)
+        return key
     
     def add(
         self,
         operation: Callable[[SignalData], SignalData],
-        name: Optional[str] = None
+        name: Optional[str] = None,
+        cacheable: bool = True
     ) -> 'Pipeline':
         """
         Add an operation to the pipeline.
@@ -51,6 +90,7 @@ class Pipeline:
         Args:
             operation: A function that takes SignalData and returns SignalData
             name: Optional name for this operation
+            cacheable: Whether this operation's result can be cached
             
         Returns:
             Self for method chaining
@@ -58,7 +98,8 @@ class Pipeline:
         op_name = name or f"Op{len(self.operations)}"
         self.operations.append({
             'name': op_name,
-            'func': operation
+            'func': operation,
+            'cacheable': cacheable
         })
         return self
     
@@ -137,36 +178,183 @@ class Pipeline:
             callback(signal_data)
             return signal_data
         
-        return self.add(wrapper, name=name or "tap")
+        # Tap operations shouldn't be cached (they're for side effects)
+        return self.add(wrapper, name=name or "tap", cacheable=False)
+    
+    def plot(
+        self,
+        plotter: Callable[[SignalData], None],
+        name: Optional[str] = None
+    ) -> 'Pipeline':
+        """
+        Add a plotting function that visualizes the signal without modifying it.
+        
+        This is an alias for tap() with a more descriptive name for plotting.
+        
+        Args:
+            plotter: Function that plots SignalData
+            name: Optional name for this operation
+            
+        Returns:
+            Self for method chaining
+        """
+        return self.tap(plotter, name=name or "plot")
+    
+    def branch(self, name: Optional[str] = None) -> 'Pipeline':
+        """
+        Create a new pipeline branch from the current state.
+        
+        The new branch shares the operation history and will use memoization
+        to avoid re-executing common stages.
+        
+        Args:
+            name: Optional name for the new branch
+            
+        Returns:
+            A new Pipeline that shares operation history with this one
+        """
+        new_pipeline = Pipeline(
+            name=name or f"{self.name}_branch",
+            enable_cache=self._enable_cache
+        )
+        # Copy operations (shared history)
+        new_pipeline.operations = self.operations.copy()
+        new_pipeline._parent_pipeline = self
+        return new_pipeline
+    
+    def variants(
+        self,
+        operation_factory: Callable[[Any], Callable[[SignalData], SignalData]],
+        configs: List[Any],
+        names: Optional[List[str]] = None
+    ) -> List[SignalData]:
+        """
+        Create and execute multiple variants of the pipeline with different configurations.
+        
+        Uses memoization so common stages only execute once.
+        
+        Args:
+            operation_factory: Function that takes a config and returns an operation
+            configs: List of configurations to try
+            names: Optional names for each variant
+            
+        Returns:
+            List of results from each variant
+        
+        Example:
+            >>> base = Pipeline().add(gen).add(stack)
+            >>> # Try different window functions
+            >>> results = base.variants(
+            ...     lambda window: DopplerCompress(window=window),
+            ...     ['hann', 'hamming', 'blackman']
+            ... )
+        """
+        results = []
+        
+        for i, config in enumerate(configs):
+            name = names[i] if names and i < len(names) else f"Variant{i}"
+            
+            # Create a branch with the specific configuration
+            variant = self.branch(name=name)
+            variant.add(operation_factory(config), name=f"{name}_op")
+            
+            # Execute (will use memoization for common stages)
+            result = variant.run()
+            results.append(result)
+        
+        return results
+    
+    def get_intermediate_results(self) -> List[SignalData]:
+        """
+        Get all intermediate results from the last run.
+        
+        Returns:
+            List of SignalData from each stage
+        """
+        return self._intermediate_results.copy()
+    
+    def clear_cache(self):
+        """Clear the global cache for all pipelines."""
+        Pipeline._global_cache.clear()
     
     def run(
         self,
         initial_data: Optional[SignalData] = None,
-        verbose: bool = False
+        verbose: bool = False,
+        save_intermediate: bool = False,
+        use_cache: Optional[bool] = None
     ) -> SignalData:
         """
-        Execute the pipeline.
+        Execute the pipeline with memoization.
+        
+        If this pipeline shares operations with a previously executed pipeline,
+        cached results will be reused.
         
         Args:
             initial_data: Initial signal data (can be None for generators)
             verbose: Print execution progress
+            save_intermediate: Save intermediate results for inspection
+            use_cache: Override cache setting for this run (default: use instance setting)
             
         Returns:
             Final processed SignalData
         """
         current_data = initial_data
+        cache_enabled = use_cache if use_cache is not None else self._enable_cache
+        
+        if save_intermediate:
+            self._intermediate_results = []
         
         for i, op in enumerate(self.operations):
-            if verbose:
-                print(f"Executing: {op['name']}...")
+            cache_key = self._get_cache_key(i)
             
-            current_data = op['func'](current_data)
+            # Check cache if enabled and operation is cacheable
+            if cache_enabled and op.get('cacheable', True) and cache_key in Pipeline._global_cache:
+                if verbose:
+                    print(f"[CACHED] {op['name']}...")
+                current_data = Pipeline._global_cache[cache_key]
+            else:
+                # Execute operation
+                if verbose:
+                    cache_status = "" if cache_enabled else "[NO CACHE]"
+                    print(f"Executing: {op['name']}... {cache_status}")
+                
+                current_data = op['func'](current_data)
+                
+                # Cache result if enabled and cacheable
+                if cache_enabled and op.get('cacheable', True):
+                    Pipeline._global_cache[cache_key] = current_data
+            
+            if save_intermediate and current_data is not None:
+                self._intermediate_results.append(current_data.copy())
             
             if verbose and current_data is not None:
                 print(f"  Output shape: {current_data.shape}")
         
-        self._cached_result = current_data
         return current_data
+    
+    def run_and_compare(
+        self,
+        initial_data: Optional[SignalData] = None,
+        comparison_func: Optional[Callable[[List[SignalData]], Any]] = None
+    ) -> Tuple[SignalData, List[SignalData]]:
+        """
+        Run pipeline with intermediate results and optionally compare them.
+        
+        Args:
+            initial_data: Initial signal data
+            comparison_func: Optional function to compare intermediate results
+            
+        Returns:
+            Tuple of (final result, list of intermediate results)
+        """
+        result = self.run(initial_data, save_intermediate=True)
+        intermediates = self.get_intermediate_results()
+        
+        if comparison_func:
+            comparison_func(intermediates)
+        
+        return result, intermediates
     
     def __call__(self, initial_data: Optional[SignalData] = None) -> SignalData:
         """
@@ -187,17 +375,19 @@ class Pipeline:
     def __repr__(self) -> str:
         """Return string representation of the pipeline."""
         op_names = [op['name'] for op in self.operations]
-        return f"Pipeline('{self.name}', ops={' -> '.join(op_names)})"
+        cache_status = " [cached]" if self._enable_cache else ""
+        return f"Pipeline('{self.name}'{cache_status}, ops={' -> '.join(op_names)})"
 
 
-def create_pipeline(name: str = "Pipeline") -> Pipeline:
+def create_pipeline(name: str = "Pipeline", enable_cache: bool = True) -> Pipeline:
     """
     Factory function to create a new pipeline.
     
     Args:
         name: Optional name for the pipeline
+        enable_cache: Whether to enable memoization
         
     Returns:
         A new Pipeline instance
     """
-    return Pipeline(name)
+    return Pipeline(name, enable_cache=enable_cache)
