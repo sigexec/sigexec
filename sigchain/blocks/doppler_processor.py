@@ -13,7 +13,7 @@ class DopplerProcessor(ProcessingBlock):
     The result is a Range-Doppler Map.
     """
     
-    def __init__(self, name: str = None, window: str = 'hann'):
+    # def __init__(self, name: str = None, window: str = 'hann'):
         """
         Initialize the Doppler processor.
         

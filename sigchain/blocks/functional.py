@@ -153,42 +153,42 @@ class RangeCompress:
                 window_func = np.ones(pulse_length)
             reference_pulse = reference_pulse * window_func
         
-        # Matched filter is conjugated and time-reversed reference
-        matched_filter = np.conj(reference_pulse[::-1])
+        # Matched filter is conjugated reference (for correlation)
+        matched_filter = np.conj(reference_pulse)
         
         num_pulses, num_samples = data.shape
         pulse_length = len(reference_pulse)
+        
+        from scipy import signal as sp_signal
         
         if self.oversample_factor > 1:
             # FFT-based processing with oversampling
             nfft = num_samples * self.oversample_factor
             
-            # Compute FFT of matched filter (zero-padded)
-            filter_fft = np.fft.fft(matched_filter, n=nfft)
-            
             filtered_data = np.zeros((num_pulses, nfft), dtype=data.dtype)
             
             for i in range(num_pulses):
-                # FFT of signal (zero-padded)
-                signal_fft = np.fft.fft(data[i, :], n=nfft)
-                # Multiply in frequency domain (convolution in time domain)
-                result_fft = signal_fft * filter_fft
-                # IFFT to get time-domain result
-                filtered_data[i, :] = np.fft.ifft(result_fft)
+                # Upsample signal via zero-padding in frequency domain
+                signal_upsampled = np.fft.ifft(np.fft.fft(data[i, :]), n=nfft) * self.oversample_factor
+                # Use scipy correlate with 'same' mode for consistent indexing
+                filtered_data[i, :] = sp_signal.correlate(
+                    signal_upsampled,
+                    matched_filter,
+                    mode='same'
+                )
             
             output_length = nfft
         else:
-            # Time-domain correlation with 'valid' mode
-            output_length = num_samples - pulse_length + 1
+            # Time-domain correlation with 'same' mode for consistent indexing
+            output_length = num_samples
             
-            from scipy import signal
             filtered_data = np.zeros((num_pulses, output_length), dtype=data.dtype)
             
             for i in range(num_pulses):
-                filtered_data[i, :] = signal.correlate(
+                filtered_data[i, :] = sp_signal.correlate(
                     data[i, :], 
                     matched_filter, 
-                    mode='valid'
+                    mode='same'
                 )
         
         metadata = signal_data.metadata.copy()
