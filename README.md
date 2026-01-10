@@ -4,11 +4,18 @@ A Python framework for building signal processing pipelines using Directed Acycl
 
 **SigChain provides the framework - you bring the blocks!** The included radar processing blocks are examples showing how to use the framework. You can easily create your own custom blocks for any signal processing application.
 
+## Quick Links
+
+📖 **Want to create your own blocks?** → [Custom Blocks Guide](docs/CUSTOM_BLOCKS.md)  
+🔧 **Quick Reference** → [Plugin Reference](docs/PLUGIN_REFERENCE.md)  
+🏗️ **Architecture Overview** → [Architecture Guide](docs/ARCHITECTURE.md)  
+💡 **See Examples** → [Custom Blocks Example](examples/custom_blocks_example.py)
+
 ## Features
 
 - **Clean DAG Architecture**: Build pipelines where a single object (SignalData) flows through processing stages
 - **Data Class Blocks**: Type-safe, composable processing blocks using Python dataclasses
-- **Extensible**: Create custom blocks as simple dataclasses - [see guide](docs/CUSTOM_BLOCKS.md)
+- **Extensible**: Create custom blocks as simple dataclasses - no complex interfaces required
 - **Functional Composition**: Chain operations naturally with consistent input/output types
 - **Flexible API**: Multiple usage patterns from explicit chaining to pipeline builders
 - **Example Application**: Complete radar processing pipeline demonstrating:
