@@ -206,11 +206,14 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
-# Generated output files (but NOT docs/demo or docs/custom_demo)
+# Generated output files
 *.png
 *.jpg
 *.jpeg
 
-# Keep the documentation demos
-!docs/demo/**
-!docs/custom_demo/**
+# Staticdash generated dashboard output (built by CI/CD)
+docs/index.html
+docs/assets/
+docs/radar-processing/
+docs/custom-blocks-tutorial/
+docs/*-dashboard/

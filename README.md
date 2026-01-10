@@ -10,7 +10,7 @@ A Python framework for building signal processing pipelines using Directed Acycl
 🔧 **Quick Reference** → [Plugin Reference](docs/PLUGIN_REFERENCE.md)  
 🏗️ **Architecture Overview** → [Architecture Guide](docs/ARCHITECTURE.md)  
 💡 **See Examples** → [Custom Blocks Example](examples/custom_blocks_example.py)  
-🎯 **Interactive Demos** → [Live Dashboards](https://briday1.github.io/sigchain/) *(GitHub Pages)*
+🎯 **Interactive Demos** → [Live Dashboards](https://briday1.github.io/sigchain/) *(Auto-deployed via CI/CD)*
 
 ## Features
 
