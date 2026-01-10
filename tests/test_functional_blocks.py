@@ -58,8 +58,9 @@ def test_range_compress():
     
     num_pulses = 16
     num_samples = 32
+    pulse_length = 16  # Reference pulse shorter than observation
     data = np.random.randn(num_pulses, num_samples) + 1j * np.random.randn(num_pulses, num_samples)
-    reference_pulse = np.random.randn(num_samples) + 1j * np.random.randn(num_samples)
+    reference_pulse = np.random.randn(pulse_length) + 1j * np.random.randn(pulse_length)
     
     sig = SignalData(
         data=data,
@@ -71,7 +72,9 @@ def test_range_compress():
     result = compress(sig)
     
     assert isinstance(result, SignalData)
-    assert result.shape == data.shape
+    # With 'valid' mode: output length = num_samples - pulse_length + 1
+    expected_output_length = num_samples - pulse_length + 1
+    assert result.shape == (num_pulses, expected_output_length)
     assert result.metadata['range_compressed'] == True
     
     print("  ✓ RangeCompress tests passed")

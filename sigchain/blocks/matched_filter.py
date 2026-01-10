@@ -27,8 +27,9 @@ class MatchedFilter(ProcessingBlock):
         """
         Apply matched filtering to compress in range.
         
-        Uses 'same' mode correlation which keeps output the same size as input.
-        The peak will appear at the center of the matched pulse (delay + N/2).
+        Uses 'valid' mode correlation which returns only the portion where
+        the filter and signal fully overlap. For M input samples and N filter
+        samples, output has M-N+1 samples.
         
         Args:
             signal_data: Input signal data with pulse-stacked data
@@ -51,21 +52,25 @@ class MatchedFilter(ProcessingBlock):
         
         # Apply matched filter to each pulse (row)
         num_pulses, num_samples = data.shape
-        filtered_data = np.zeros_like(data)
+        pulse_length = len(reference_pulse)
+        
+        # Use 'valid' mode: output length = num_samples - pulse_length + 1
+        output_length = num_samples - pulse_length + 1
+        filtered_data = np.zeros((num_pulses, output_length), dtype=data.dtype)
         
         for i in range(num_pulses):
-            # Use scipy's correlate with 'same' mode
-            # This keeps output the same size as input
+            # Use scipy's correlate with 'valid' mode
             filtered_data[i, :] = signal.correlate(
                 data[i, :], 
                 matched_filter, 
-                mode='same'
+                mode='valid'
             )
         
         # Create output with updated metadata
         metadata = signal_data.metadata.copy()
         metadata['range_compressed'] = True
         metadata['matched_filter_applied'] = True
+        metadata['num_range_bins'] = output_length
         
         return SignalData(
             data=filtered_data,

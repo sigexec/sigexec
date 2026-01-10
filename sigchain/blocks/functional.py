@@ -121,9 +121,7 @@ class RangeCompress:
     
     def __call__(self, signal_data: SignalData) -> SignalData:
         """
-        Apply matched filtering for range compression.
-        
-        Uses 'same' mode correlation which keeps output the same size as input.
+        Apply matched filtering for range compression using 'valid' mode.
         """
         data = signal_data.data
         
@@ -136,21 +134,23 @@ class RangeCompress:
         matched_filter = np.conj(reference_pulse)
         
         num_pulses, num_samples = data.shape
+        pulse_length = len(reference_pulse)
+        output_length = num_samples - pulse_length + 1
         
-        # Use scipy's correlate for matched filtering with 'same' mode
+        # Use scipy's correlate for matched filtering with 'valid' mode
         from scipy import signal
-        filtered_data = np.zeros_like(data)
+        filtered_data = np.zeros((num_pulses, output_length), dtype=data.dtype)
         
         for i in range(num_pulses):
-            # Use 'same' mode to keep output same size as input
             filtered_data[i, :] = signal.correlate(
                 data[i, :], 
                 matched_filter, 
-                mode='same'
+                mode='valid'
             )
         
         metadata = signal_data.metadata.copy()
         metadata['range_compressed'] = True
+        metadata['num_range_bins'] = output_length
         
         return SignalData(
             data=filtered_data,

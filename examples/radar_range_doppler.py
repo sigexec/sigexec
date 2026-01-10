@@ -25,9 +25,12 @@ def main():
     # Create processing blocks
     print("\n1. Creating processing blocks...")
     
-    # Generate radar signal with a target at 3km range and 150 m/s velocity
-    # Target delay: 20 microseconds (approximately 3 km range)
-    # Target Doppler: 1 kHz (approximately 150 m/s at 10 GHz carrier)
+    # Generate radar signal with a target at optimal bin-aligned positions
+    # Target delay: 15 microseconds = 150 samples (1.5x pulse length, approximately 2.25 km range)
+    # Target Doppler: 296.875 Hz (exactly at a Doppler bin center for perfect alignment)
+    # With PRF=1000 Hz and 128 pulses, bin spacing is 7.8125 Hz
+    # 296.875 Hz = 38 * 7.8125 Hz (bin 38)
+    # Both range and Doppler are chosen to align with bin centers for optimal peak detection
     radar_gen = RadarGenerator(
         num_pulses=128,
         pulse_duration=10e-6,
@@ -35,8 +38,8 @@ def main():
         sample_rate=10e6,
         bandwidth=5e6,
         carrier_freq=10e9,
-        target_delay=20e-6,
-        target_doppler=1000.0,
+        target_delay=15e-6,
+        target_doppler=296.875,
         noise_power=0.1,
         name="RadarGenerator"
     )

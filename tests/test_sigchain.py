@@ -116,8 +116,9 @@ def test_matched_filter():
     # Create test data with reference pulse
     num_pulses = 32
     num_samples = 50
+    pulse_length = 20  # Reference pulse shorter than observation
     data = np.random.randn(num_pulses, num_samples) + 1j * np.random.randn(num_pulses, num_samples)
-    reference_pulse = np.random.randn(num_samples) + 1j * np.random.randn(num_samples)
+    reference_pulse = np.random.randn(pulse_length) + 1j * np.random.randn(pulse_length)
     
     sig = SignalData(
         data=data,
@@ -128,7 +129,9 @@ def test_matched_filter():
     mf = MatchedFilter()
     sig_out = mf.process(sig)
     
-    assert sig_out.shape == data.shape
+    # With 'valid' mode: output length = num_samples - pulse_length + 1
+    expected_output_length = num_samples - pulse_length + 1
+    assert sig_out.shape == (num_pulses, expected_output_length)
     assert sig_out.metadata['range_compressed'] == True
     
     print("  ✓ MatchedFilter tests passed")
