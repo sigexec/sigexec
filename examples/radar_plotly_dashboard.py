@@ -33,7 +33,7 @@ except ImportError:
 
 def create_radar_demo_dashboard(
     num_pulses: int = 128,
-    target_delay: float = 3e-6,
+    target_delay: float = 2e-6,
     target_doppler: float = 200.0,
     noise_power: float = 0.01,
 ) -> sd.Dashboard:
