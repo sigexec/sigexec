@@ -40,7 +40,7 @@ class DopplerProcessor(ProcessingBlock):
         # Apply window function if specified
         if self.window != 'none':
             if self.window == 'hann':
-                window_func = np.hanning(num_pulses)
+                window_func = np.hanning(num_pulses)  # Note: numpy.hann() available in numpy 2.0+
             elif self.window == 'hamming':
                 window_func = np.hamming(num_pulses)
             else:
