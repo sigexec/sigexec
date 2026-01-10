@@ -26,6 +26,3 @@ dependencies = [
     "scipy>=1.7.0",
     "matplotlib>=3.3.0",
 ]
-
-[tool.setuptools.packages.find]
-include = ["sigchain*"]
