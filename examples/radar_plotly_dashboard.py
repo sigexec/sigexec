@@ -7,6 +7,7 @@ to create a multi-dashboard site.
 """
 
 import numpy as np
+import pandas as pd
 from sigchain import Pipeline, SignalData
 from sigchain.blocks import (
     LFMGenerator,
@@ -69,12 +70,16 @@ def create_radar_demo_dashboard(
     Radar system parameters and target characteristics for this simulation:
     """)
     
-    import pandas as pd
+    # Radar system parameters (should match LFMGenerator parameters)
+    sample_rate_mhz = 10
+    pulse_duration_us = 10
+    bandwidth_mhz = 5
+    pri_ms = 1
     
     # Calculate derived values
     c = 3e8  # Speed of light
     target_range_m = target_delay * c / 2
-    pri = 1e-3  # Pulse repetition interval
+    pri = pri_ms * 1e-3  # Convert to seconds
     prf = 1 / pri
     max_doppler = prf / 2
     
@@ -94,10 +99,10 @@ def create_radar_demo_dashboard(
         ],
         'Value': [
             num_pulses,
-            '10',
-            '10',
-            '5',
-            '1',
+            sample_rate_mhz,
+            pulse_duration_us,
+            bandwidth_mhz,
+            pri_ms,
             f'{prf:.0f}',
             f'±{max_doppler:.0f}',
             f'{target_delay * 1e6:.2f}',
@@ -132,10 +137,10 @@ def create_radar_demo_dashboard(
     
     gen = LFMGenerator(
         num_pulses=num_pulses,
-        pulse_duration=10e-6,
-        pulse_repetition_interval=1e-3,
-        sample_rate=10e6,
-        bandwidth=5e6,
+        pulse_duration=pulse_duration_us * 1e-6,
+        pulse_repetition_interval=pri_ms * 1e-3,
+        sample_rate=sample_rate_mhz * 1e6,
+        bandwidth=bandwidth_mhz * 1e6,
         target_delay=target_delay,
         target_doppler=target_doppler,
         noise_power=noise_power,
