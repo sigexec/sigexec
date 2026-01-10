@@ -1,5 +1,6 @@
 name: Build and Deploy Dashboards
 
+# Generates interactive dashboards and deploys to GitHub Pages
 on:
   push:
     branches:
