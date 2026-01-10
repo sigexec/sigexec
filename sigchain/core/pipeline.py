@@ -273,9 +273,11 @@ class Pipeline:
         """
         return self._intermediate_results.copy()
     
-    def clear_cache(self):
-        """Clear the global cache for all pipelines."""
-        Pipeline._global_cache.clear()
+    def clear_cache(cls):
+        """Clear the global cache for all pipelines. This is a class method."""
+        cls._global_cache.clear()
+    
+    clear_cache = classmethod(clear_cache)
     
     def run(
         self,

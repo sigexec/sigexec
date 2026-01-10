@@ -163,7 +163,14 @@ class DopplerCompress:
                 window_func = np.hanning(num_pulses)
             elif self.window == 'hamming':
                 window_func = np.hamming(num_pulses)
+            elif self.window == 'blackman':
+                window_func = np.blackman(num_pulses)
+            elif self.window == 'bartlett':
+                window_func = np.bartlett(num_pulses)
             else:
+                # Unknown window type - use rectangular (no window)
+                import warnings
+                warnings.warn(f"Unknown window type '{self.window}', using rectangular window")
                 window_func = np.ones(num_pulses)
             
             windowed_data = data * window_func[:, np.newaxis]

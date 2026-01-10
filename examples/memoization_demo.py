@@ -168,7 +168,7 @@ def example_manual_cache_control():
     
     # Clear cache
     print("\nClearing global cache...")
-    Pipeline.clear_cache(Pipeline())
+    Pipeline.clear_cache()
     print("  Cache cleared!")
 
 
@@ -202,7 +202,7 @@ def example_timing_comparison():
     print(f"  Executed {len(branches)} branches in {with_cache_time:.3f}s")
     
     # Clear cache and time without
-    Pipeline.clear_cache(Pipeline())
+    Pipeline.clear_cache()
     
     print("\nWithout memoization (cache disabled):")
     branches_no_cache = [
