@@ -22,7 +22,6 @@ A Python framework for building signal processing pipelines using Directed Acycl
 ```bash
 git clone https://github.com/briday1/sigchain.git
 cd sigchain
-pip install -r requirements.txt
 pip install -e .
 ```
 
