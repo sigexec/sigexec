@@ -27,5 +27,6 @@ dependencies = [
     "matplotlib>=3.3.0",
 ]
 
-[tool.setuptools]
-packages = ["sigchain", "sigchain.core", "sigchain.blocks"]
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["sigchain*"]
