@@ -153,8 +153,8 @@ class RangeCompress:
                 window_func = np.ones(pulse_length)
             reference_pulse = reference_pulse * window_func
         
-        # Matched filter is conjugated reference
-        matched_filter = np.conj(reference_pulse)
+        # Matched filter is conjugated and time-reversed reference
+        matched_filter = np.conj(reference_pulse[::-1])
         
         num_pulses, num_samples = data.shape
         pulse_length = len(reference_pulse)
@@ -171,7 +171,7 @@ class RangeCompress:
             for i in range(num_pulses):
                 # FFT of signal (zero-padded)
                 signal_fft = np.fft.fft(data[i, :], n=nfft)
-                # Multiply in frequency domain (equivalent to correlation)
+                # Multiply in frequency domain (convolution in time domain)
                 result_fft = signal_fft * filter_fft
                 # IFFT to get time-domain result
                 filtered_data[i, :] = np.fft.ifft(result_fft)
