@@ -128,6 +128,34 @@ def create_radar_demo_dashboard(
     config_df = pd.DataFrame(config_data)
     page.add_table(config_df)
     
+    # Add code example before the demo
+    page.add_header("Code Example", level=2)
+    page.add_text("""
+    Here's how to reproduce this processing pipeline using sigchain:
+    """)
+    
+    code_example = f"""
+from sigchain import Pipeline
+from sigchain.blocks import LFMGenerator, StackPulses, RangeCompress, DopplerCompress
+
+# Create processing pipeline
+result = (Pipeline("Radar")
+    .add(LFMGenerator(
+        num_pulses={num_pulses},
+        target_delay={target_delay},
+        target_doppler={target_doppler},
+    ))
+    .add(StackPulses())
+    .add(RangeCompress(window='hamming', oversample_factor=2))
+    .add(DopplerCompress(window='hann', oversample_factor=2))
+    .run()
+)
+
+# Result contains the Range-Doppler Map
+rdm = result.data
+"""
+    page.add_syntax(code_example, language='python')
+    
     # Stage 1: Generate LFM Signal
     page.add_header("Stage 1: LFM Signal Generation", level=2)
     page.add_text("""
@@ -194,7 +222,7 @@ def create_radar_demo_dashboard(
     fig3 = plot_pulse_matrix(
         signal_stacked,
         title=f"Stacked Pulses ({num_pulses} pulses × {signal_stacked.shape[1]} samples)",
-        colorscale="Viridis",
+        colorscale="Greys",
         height=500,
         use_db=True,
     )
@@ -212,17 +240,18 @@ def create_radar_demo_dashboard(
     page.add_text("""
     Apply matched filtering using the transmitted waveform as the filter.
     This correlates the received signal with the known transmitted pulse,
-    compressing it in time and improving SNR.
+    compressing it in time and improving SNR. A Hamming window is applied
+    to the matched filter to reduce sidelobe levels.
     """)
     
-    range_comp = RangeCompress()
+    range_comp = RangeCompress(window='hamming', oversample_factor=2)
     signal_range_compressed = range_comp(signal_stacked)
     
     # Plot range-compressed pulse matrix
     fig4 = plot_pulse_matrix(
         signal_range_compressed,
         title="Range-Compressed Pulses",
-        colorscale="Hot",
+        colorscale="Greys",
         height=500,
         use_db=True,
     )
@@ -253,17 +282,18 @@ def create_radar_demo_dashboard(
     page.add_text("""
     Apply FFT along the pulse dimension to resolve Doppler frequency.
     This creates the final Range-Doppler Map (RDM) that shows both
-    target range and velocity.
+    target range and velocity. A Hann window is applied to reduce spectral leakage,
+    and 2x oversampling interpolates the Doppler response.
     """)
     
-    doppler_comp = DopplerCompress(window='hann')
+    doppler_comp = DopplerCompress(window='hann', oversample_factor=2)
     signal_rdm = doppler_comp(signal_range_compressed)
     
     # Plot final Range-Doppler Map
     fig6 = plot_range_doppler_map(
         signal_rdm,
         title="Range-Doppler Map",
-        colorscale="Jet",
+        colorscale="Greys",
         height=600,
         use_db=True,
         db_range=50,
@@ -276,9 +306,9 @@ def create_radar_demo_dashboard(
     - **X-axis**: Target range (distance from radar)
     - **Y-axis**: Doppler frequency (related to target velocity)
     - **Color**: Signal strength in dB
-    - **Red X**: True target location
+    - **Black Box**: True target location
     
-    The bright spot near the red X mark is our detected target.
+    The bright spot near the target marker is our detected target.
     The background shows the noise floor and any sidelobes from the processing.
     """)
     
@@ -296,24 +326,51 @@ def create_radar_demo_dashboard(
         detected_doppler = peak_doppler_idx - num_pulses // 2
     
     c = 3e8
-    detected_range = peak_range_idx / signal_generated.sample_rate * c / 2 / 1000
+    detected_range = peak_range_idx / signal_rdm.sample_rate * c / 2 / 1000
     true_range = target_delay * c / 2 / 1000
     
     snr_db = 20 * np.log10(rdm_data[peak_idx] / np.median(rdm_data))
     
-    page.add_text(f"""
-    **Detection Results:**
-    - **True Target**: Range = {true_range:.3f} km, Doppler = {target_doppler:.1f} Hz
-    - **Detected Peak**: Range = {detected_range:.3f} km, Doppler = {detected_doppler:.1f} Hz
-    - **Range Error**: {abs(detected_range - true_range)*1000:.1f} m
-    - **Doppler Error**: {abs(detected_doppler - target_doppler):.1f} Hz
-    - **Estimated SNR**: {snr_db:.1f} dB
+    # Create results table
+    results_data = {
+        'Metric': [
+            'True Target Range',
+            'Detected Peak Range',
+            'Range Error',
+            'True Target Doppler',
+            'Detected Peak Doppler',
+            'Doppler Error',
+            'Estimated SNR',
+        ],
+        'Value': [
+            f'{true_range:.3f}',
+            f'{detected_range:.3f}',
+            f'{abs(detected_range - true_range)*1000:.1f}',
+            f'{target_doppler:.1f}',
+            f'{detected_doppler:.1f}',
+            f'{abs(detected_doppler - target_doppler):.1f}',
+            f'{snr_db:.1f}',
+        ],
+        'Unit': [
+            'km',
+            'km',
+            'm',
+            'Hz',
+            'Hz',
+            'Hz',
+            'dB',
+        ]
+    }
     
+    results_df = pd.DataFrame(results_data)
+    page.add_table(results_df)
+    
+    page.add_text(f"""
     **Processing Stages Completed:**
     1. ✓ LFM Signal Generation ({num_pulses} pulses)
     2. ✓ Pulse Stacking (2D matrix organization)
-    3. ✓ Range Compression (Matched filtering)
-    4. ✓ Doppler Compression (FFT processing)
+    3. ✓ Range Compression (Matched filtering with Hamming window, 2x oversampling)
+    4. ✓ Doppler Compression (FFT processing with Hann window, 2x oversampling)
     """)
     
     # Add code example

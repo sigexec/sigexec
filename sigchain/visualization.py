@@ -97,7 +97,7 @@ def plot_timeseries(
 def plot_pulse_matrix(
     signal_data: SignalData,
     title: str = "Pulse Matrix",
-    colorscale: str = "Viridis",
+    colorscale: str = "Greys",
     height: int = 500,
     use_db: bool = True,
     db_floor: float = -60,
@@ -241,7 +241,7 @@ def plot_range_profile(
 def plot_range_doppler_map(
     signal_data: SignalData,
     title: str = "Range-Doppler Map",
-    colorscale: str = "Jet",
+    colorscale: str = "Greys",
     height: int = 600,
     use_db: bool = True,
     db_range: float = 50,
@@ -310,10 +310,10 @@ def plot_range_doppler_map(
             y=[target_doppler],
             mode='markers',
             marker=dict(
-                symbol='x',
+                symbol='square',
                 size=15,
-                color='red',
-                line=dict(width=2, color='white'),
+                color='rgba(0,0,0,0)',  # Transparent fill
+                line=dict(width=2, color='black'),
             ),
             name='True Target',
             showlegend=True,

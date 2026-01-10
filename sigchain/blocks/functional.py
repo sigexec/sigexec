@@ -117,11 +117,17 @@ class RangeCompress:
     Data class for range compression via matched filtering.
     
     Uses the reference pulse from metadata to perform correlation.
+    Supports windowing and oversampling via FFT-based processing.
     """
+    window: str = 'none'  # Window to apply to reference pulse ('none', 'hamming', 'hann', etc.)
+    oversample_factor: int = 1  # Oversampling factor for FFT processing (1 = no oversampling)
     
     def __call__(self, signal_data: SignalData) -> SignalData:
         """
-        Apply matched filtering for range compression using 'valid' mode.
+        Apply matched filtering for range compression.
+        
+        If oversample_factor > 1, uses FFT-based processing with zero-padding.
+        Otherwise uses time-domain correlation.
         """
         data = signal_data.data
         
@@ -129,32 +135,71 @@ class RangeCompress:
             raise ValueError("Reference pulse not found in metadata")
         
         reference_pulse = signal_data.metadata['reference_pulse']
+        
+        # Apply window to reference pulse if specified
+        if self.window != 'none':
+            pulse_length = len(reference_pulse)
+            if self.window == 'hann':
+                window_func = np.hanning(pulse_length)
+            elif self.window == 'hamming':
+                window_func = np.hamming(pulse_length)
+            elif self.window == 'blackman':
+                window_func = np.blackman(pulse_length)
+            elif self.window == 'bartlett':
+                window_func = np.bartlett(pulse_length)
+            else:
+                import warnings
+                warnings.warn(f"Unknown window type '{self.window}', using rectangular window")
+                window_func = np.ones(pulse_length)
+            reference_pulse = reference_pulse * window_func
+        
         # Matched filter is conjugated reference
-        # Note: scipy.signal.correlate does time-reversal internally
         matched_filter = np.conj(reference_pulse)
         
         num_pulses, num_samples = data.shape
         pulse_length = len(reference_pulse)
-        output_length = num_samples - pulse_length + 1
         
-        # Use scipy's correlate for matched filtering with 'valid' mode
-        from scipy import signal
-        filtered_data = np.zeros((num_pulses, output_length), dtype=data.dtype)
-        
-        for i in range(num_pulses):
-            filtered_data[i, :] = signal.correlate(
-                data[i, :], 
-                matched_filter, 
-                mode='valid'
-            )
+        if self.oversample_factor > 1:
+            # FFT-based processing with oversampling
+            nfft = num_samples * self.oversample_factor
+            
+            # Compute FFT of matched filter (zero-padded)
+            filter_fft = np.fft.fft(matched_filter, n=nfft)
+            
+            filtered_data = np.zeros((num_pulses, nfft), dtype=data.dtype)
+            
+            for i in range(num_pulses):
+                # FFT of signal (zero-padded)
+                signal_fft = np.fft.fft(data[i, :], n=nfft)
+                # Multiply in frequency domain (equivalent to correlation)
+                result_fft = signal_fft * filter_fft
+                # IFFT to get time-domain result
+                filtered_data[i, :] = np.fft.ifft(result_fft)
+            
+            output_length = nfft
+        else:
+            # Time-domain correlation with 'valid' mode
+            output_length = num_samples - pulse_length + 1
+            
+            from scipy import signal
+            filtered_data = np.zeros((num_pulses, output_length), dtype=data.dtype)
+            
+            for i in range(num_pulses):
+                filtered_data[i, :] = signal.correlate(
+                    data[i, :], 
+                    matched_filter, 
+                    mode='valid'
+                )
         
         metadata = signal_data.metadata.copy()
         metadata['range_compressed'] = True
         metadata['num_range_bins'] = output_length
+        metadata['range_window'] = self.window
+        metadata['range_oversample_factor'] = self.oversample_factor
         
         return SignalData(
             data=filtered_data,
-            sample_rate=signal_data.sample_rate,
+            sample_rate=signal_data.sample_rate * self.oversample_factor,
             metadata=metadata
         )
 
@@ -164,12 +209,13 @@ class DopplerCompress:
     """
     Data class for Doppler compression via FFT.
     
-    Applies FFT along pulse dimension with optional windowing.
+    Applies FFT along pulse dimension with optional windowing and oversampling.
     """
     window: str = 'hann'
+    oversample_factor: int = 1  # Oversampling factor (1 = no oversampling)
     
     def __call__(self, signal_data: SignalData) -> SignalData:
-        """Apply FFT for Doppler compression."""
+        """Apply FFT for Doppler compression with optional oversampling."""
         data = signal_data.data
         num_pulses, num_samples = data.shape
         
@@ -193,24 +239,29 @@ class DopplerCompress:
         else:
             windowed_data = data
         
-        # Perform FFT along pulse dimension
+        # Determine FFT length with oversampling
+        nfft = num_pulses * self.oversample_factor
+        
+        # Perform FFT along pulse dimension with zero-padding for oversampling
         range_doppler_map = np.fft.fftshift(
-            np.fft.fft(windowed_data, axis=0),
+            np.fft.fft(windowed_data, n=nfft, axis=0),
             axes=0
         )
         
         # Calculate Doppler frequency axis
         if 'pulse_repetition_interval' in signal_data.metadata:
             pri = signal_data.metadata['pulse_repetition_interval']
-            doppler_freq = np.fft.fftshift(np.fft.fftfreq(num_pulses, pri))
+            doppler_freq = np.fft.fftshift(np.fft.fftfreq(nfft, pri))
         else:
-            doppler_freq = np.arange(num_pulses) - num_pulses // 2
+            doppler_freq = np.arange(nfft) - nfft // 2
         
         metadata = signal_data.metadata.copy()
         metadata['doppler_compressed'] = True
         metadata['range_doppler_map'] = True
         metadata['doppler_frequencies'] = doppler_freq
         metadata['window_applied'] = self.window
+        metadata['doppler_oversample_factor'] = self.oversample_factor
+        metadata['num_doppler_bins'] = nfft
         
         return SignalData(
             data=range_doppler_map,
