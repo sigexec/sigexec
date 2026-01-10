@@ -5,4 +5,18 @@ from .pulse_stacker import PulseStacker
 from .matched_filter import MatchedFilter
 from .doppler_processor import DopplerProcessor
 
-__all__ = ['RadarGenerator', 'PulseStacker', 'MatchedFilter', 'DopplerProcessor']
+# Functional/data class style blocks
+from .functional import (
+    LFMGenerator,
+    StackPulses,
+    RangeCompress,
+    DopplerCompress,
+    ToMagnitudeDB,
+    Normalize
+)
+
+__all__ = [
+    'RadarGenerator', 'PulseStacker', 'MatchedFilter', 'DopplerProcessor',
+    'LFMGenerator', 'StackPulses', 'RangeCompress', 'DopplerCompress',
+    'ToMagnitudeDB', 'Normalize'
+]
