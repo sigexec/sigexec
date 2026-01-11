@@ -4,7 +4,7 @@
 
 **SigChain = Framework + Your Blocks**
 
-- **Framework**: `SignalData`, `Pipeline`, `ProcessingBlock` (in `sigchain.core`)
+- **Framework**: `SignalData`, `Pipeline` (in `sigchain.core`)
 - **Example Blocks**: Radar blocks in `sigchain.blocks` (just examples!)
 - **Your Blocks**: Easy to create, easy to distribute
 
@@ -260,12 +260,12 @@ from my_blocks import MyBlock
 
 - **Full Guide**: [docs/CUSTOM_BLOCKS.md](../CUSTOM_BLOCKS.md)
 - **Architecture**: [docs/ARCHITECTURE.md](../ARCHITECTURE.md)
-- **Examples**: [examples/custom_blocks_example.py](../examples/custom_blocks_example.py)
+- **Examples**: [examples/](../examples/)
 - **Tests**: [tests/test_custom_blocks.py](../tests/test_custom_blocks.py)
 
 ## FAQ
 
-**Q: Do I need to inherit from ProcessingBlock?**
+**Q: Do I need special base classes?**
 A: No! Just implement `__call__(self, SignalData) -> SignalData`
 
 **Q: Can I use blocks from multiple packages?**

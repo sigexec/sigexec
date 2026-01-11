@@ -1,77 +1,96 @@
 """Matched filter block for range compression."""
 
+from dataclasses import dataclass
 import numpy as np
-from ..core.block import ProcessingBlock
+from scipy import signal as sp_signal
 from ..core.data import SignalData
 
 
-class MatchedFilter(ProcessingBlock):
+@dataclass
+class RangeCompress:
     """
-    Performs matched filtering (range compression) on radar data.
+    Performs matched filtering for range compression.
     
-    This block correlates the received signal with the transmitted waveform
-    to compress the signal in range and improve SNR.
+    Uses the reference pulse from metadata to perform correlation.
+    Supports windowing and oversampling via FFT-based processing.
     """
+    window: str = None
+    oversample_factor: int = 1
     
-    def __init__(self, name: str = None):
+    def __call__(self, signal_data: SignalData) -> SignalData:
         """
-        Initialize the matched filter.
+        Apply matched filtering for range compression.
         
-        Args:
-            name: Optional name for the block
-        """
-        super().__init__(name)
-    
-    def process(self, signal_data: SignalData) -> SignalData:
-        """
-        Apply matched filtering to compress in range using FFT-based processing.
-        
-        Performs elementwise multiplication in frequency domain:
-        FFT(output) = FFT(received_signal) * conj(FFT(ideal_waveform))
-        
-        This is the standard approach for radar range compression.
-        
-        Args:
-            signal_data: Input signal data with pulse-stacked data
-            
-        Returns:
-            SignalData with range-compressed data
+        If oversample_factor > 1, uses FFT-based processing with zero-padding.
+        Otherwise uses time-domain correlation.
         """
         data = signal_data.data
         
-        # Get reference pulse from metadata (ideal waveform with no noise/delay)
-        if 'reference_pulse' in signal_data.metadata:
-            reference_pulse = signal_data.metadata['reference_pulse']
-        else:
+        if 'reference_pulse' not in signal_data.metadata:
             raise ValueError("Reference pulse not found in metadata")
         
-        # Apply matched filter to each pulse (row)
+        reference_pulse = signal_data.metadata['reference_pulse']
+        
+        # Apply window to reference pulse if specified
+        if self.window is not None and self.window.lower() != 'none':
+            pulse_length = len(reference_pulse)
+            if self.window == 'hann':
+                window_func = np.hanning(pulse_length)
+            elif self.window == 'hamming':
+                window_func = np.hamming(pulse_length)
+            elif self.window == 'blackman':
+                window_func = np.blackman(pulse_length)
+            elif self.window == 'bartlett':
+                window_func = np.bartlett(pulse_length)
+            else:
+                import warnings
+                warnings.warn(f"Unknown window type '{self.window}', using rectangular window")
+                window_func = np.ones(pulse_length)
+            reference_pulse = reference_pulse * window_func
+        
         num_pulses, num_samples = data.shape
+        pulse_length = len(reference_pulse)
         
-        # FFT-based matched filtering
-        # 1. Take FFT of each pulse (received signal)
-        data_fft = np.fft.fft(data, axis=1)
+        if self.oversample_factor > 1:
+            # FFT-based processing with oversampling via zero-padding
+            nfft = num_samples * self.oversample_factor
+            
+            filtered_data = np.zeros((num_pulses, num_samples), dtype=data.dtype)
+            
+            for i in range(num_pulses):
+                signal_fft = np.fft.fft(data[i, :], n=nfft)
+                
+                reference_padded = np.zeros(nfft, dtype=reference_pulse.dtype)
+                reference_padded[:len(reference_pulse)] = reference_pulse
+                reference_fft = np.fft.fft(reference_padded)
+                
+                filtered_fft = signal_fft * np.conj(reference_fft)
+                filtered_result = np.fft.ifft(filtered_fft)
+                
+                filtered_data[i, :] = filtered_result[:num_samples]
+            
+            output_length = num_samples
+        else:
+            # Time-domain correlation with 'same' mode for consistent indexing
+            output_length = num_samples
+            
+            filtered_data = np.zeros((num_pulses, output_length), dtype=data.dtype)
+            
+            for i in range(num_pulses):
+                # Matched filter: correlation with conjugate of reference
+                filtered_data[i, :] = sp_signal.correlate(
+                    data[i, :], 
+                    np.conj(reference_pulse), 
+                    mode='same'
+                )
         
-        # 2. Take FFT of the ideal reference waveform (no noise, no delay)
-        # Pad reference pulse to match the observation window length
-        reference_padded = np.zeros(num_samples, dtype=reference_pulse.dtype)
-        reference_padded[:len(reference_pulse)] = reference_pulse
-        reference_fft = np.fft.fft(reference_padded)
-        
-        # 3. Elementwise multiplication with conjugate of reference FFT
-        filtered_fft = data_fft * np.conj(reference_fft)
-        
-        # 4. IFFT to get back to time domain
-        filtered_data = np.fft.ifft(filtered_fft, axis=1)
-        
-        # Create output with updated metadata
         metadata = signal_data.metadata.copy()
         metadata['range_compressed'] = True
-        metadata['matched_filter_applied'] = True
-        metadata['num_range_bins'] = num_samples
+        metadata['num_range_bins'] = output_length
+        metadata['range_window'] = self.window
+        metadata['range_oversample_factor'] = self.oversample_factor
         
         return SignalData(
             data=filtered_data,
-            sample_rate=signal_data.sample_rate,
             metadata=metadata
         )

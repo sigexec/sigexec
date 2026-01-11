@@ -7,7 +7,7 @@ custom blocks that work seamlessly with the sigchain framework.
 
 import numpy as np
 from dataclasses import dataclass
-from sigchain import SignalData, Pipeline, ProcessingBlock
+from sigchain import SignalData, Pipeline
 
 
 # Test custom block using dataclass pattern
@@ -31,15 +31,13 @@ class TestAmplifier:
         )
 
 
-# Test custom block using ProcessingBlock inheritance
-class TestAttenuator(ProcessingBlock):
+# Test custom block using dataclass pattern with attenuation
+@dataclass
+class TestAttenuator:
     """Test block that attenuates signal."""
+    attenuation: float = 0.5
     
-    def __init__(self, attenuation=0.5, name=None):
-        super().__init__(name)
-        self.attenuation = attenuation
-    
-    def process(self, signal_data: SignalData) -> SignalData:
+    def __call__(self, signal_data: SignalData) -> SignalData:
         """Attenuate the signal."""
         attenuated = signal_data.data * self.attenuation
         

@@ -1,6 +1,6 @@
 # SigChain - Signal Processing Chain Framework
 
-A Python framework for building signal processing pipelines using Directed Acyclic Graphs (DAGs) and data classes. 
+A Python framework for building signal processing pipelines with functional dataclass blocks and fluent APIs.
 
 **SigChain provides the framework - you bring the blocks!** The included radar processing blocks are examples showing how to use the framework. You can easily create your own custom blocks for any signal processing application.
 
@@ -13,7 +13,7 @@ A Python framework for building signal processing pipelines using Directed Acycl
 
 ## Features
 
-- **Clean DAG Architecture**: Build pipelines where a single object (SignalData) flows through processing stages
+- **Clean Pipeline Architecture**: Build pipelines where a single object (SignalData) flows through processing stages
 - **Data Class Blocks**: Type-safe, composable processing blocks using Python dataclasses
 - **Extensible**: Create custom blocks as simple dataclasses - no complex interfaces required
 - **Functional Composition**: Chain operations naturally with consistent input/output types
@@ -142,15 +142,6 @@ Available data class blocks:
 - `ToMagnitudeDB` - Convert to dB scale
 - `Normalize` - Normalize signal data
 
-#### ProcessingBlock (Legacy)
-Abstract base class for traditional processing blocks:
-```python
-class ProcessingBlock(ABC):
-    @abstractmethod
-    def process(self, signal_data: SignalData) -> SignalData:
-        pass
-```
-
 #### Pipeline
 Manages execution with fluent interface:
 ```python
@@ -166,7 +157,7 @@ pipeline = (Pipeline("MyPipeline")
 
 All blocks follow the pattern: `SignalData → Block → SignalData`
 
-#### LFMGenerator (Data Class)
+#### LFMGenerator
 Generates LFM radar signals with configurable parameters:
 - Pulse duration and bandwidth
 - Target delay and Doppler shift
@@ -183,15 +174,15 @@ gen = LFMGenerator(
 signal = gen()  # Returns SignalData
 ```
 
-#### StackPulses (Data Class)
+#### StackPulses
 Organizes pulses into a 2D matrix for coherent processing.
 
-#### RangeCompress (Data Class)
+#### RangeCompress
 Performs range compression using matched filtering:
 - Correlates received signal with transmitted waveform
 - Improves SNR and range resolution
 
-#### DopplerCompress (Data Class)
+#### DopplerCompress
 Performs Doppler compression using FFT:
 - FFT along pulse dimension
 - Windowing for sidelobe reduction
@@ -204,8 +195,6 @@ The radar examples produce Range-Doppler maps showing:
 - **Target detection**: Clear peak at expected range (~3 km) and Doppler (~1 kHz)
 - **Noise floor**: Background noise visible across the map
 
-See `examples/radar_clean_dag.py` for the cleanest implementation.
-
 ## Project Structure
 
 ```
@@ -215,26 +204,23 @@ sigchain/
 │   ├── core/
 │   │   ├── __init__.py
 │   │   ├── data.py          # SignalData class
-│   │   ├── block.py         # ProcessingBlock base class (legacy)
-│   │   ├── dag.py           # DAG implementation (legacy)
 │   │   └── pipeline.py      # Pipeline with fluent interface
 │   └── blocks/
 │       ├── __init__.py
-│       ├── functional.py    # Data class blocks (recommended)
-│       ├── radar_generator.py  # Legacy block
-│       ├── pulse_stacker.py    # Legacy block
-│       ├── matched_filter.py   # Legacy block
-│       └── doppler_processor.py # Legacy block
+│       └── functional.py    # Functional processing blocks
 ├── examples/
-│   ├── radar_range_doppler.py      # Original example
-│   ├── radar_clean_dag.py          # Clean DAG approach (recommended)
-│   └── radar_fluent_pipeline.py    # Fluent pipeline API
+│   ├── radar_processing_demo.py
+│   ├── custom_blocks_demo.py
+│   ├── parameter_exploration_demo.py
+│   ├── post_processing_demo.py
+│   ├── input_variants_demo.py
+│   ├── memoization_demo.py
+│   └── publish_demos.py
 ├── tests/
 │   └── test_sigchain.py
 ├── docs/
-│   └── CLEAN_DAG.md         # Detailed documentation
-├── setup.py
-├── requirements.txt
+│   └── [Generated demo pages]
+├── pyproject.toml
 └── README.md
 ```
 
@@ -328,12 +314,10 @@ result = (Pipeline("MyPipeline")
 
 **Learn more:**
 - **[Creating Custom Blocks Guide](docs/CUSTOM_BLOCKS.md)** - Complete guide with examples
-- **[examples/custom_blocks_example.py](examples/custom_blocks_example.py)** - Working examples
 
 ## Documentation
 
-- **[CUSTOM_BLOCKS.md](docs/CUSTOM_BLOCKS.md)** - ⭐ Guide to creating and distributing custom blocks
-- **[CLEAN_DAG.md](docs/CLEAN_DAG.md)** - Comprehensive guide to the data class approach
+- **[CUSTOM_BLOCKS.md](docs/CUSTOM_BLOCKS.md)** - Guide to creating and distributing custom blocks
 - **[examples/](examples/)** - Working examples with different patterns
 - **[tests/](tests/)** - Unit tests for all components
 

@@ -3,8 +3,8 @@ Simple tests to verify the signal processing chain implementation.
 """
 
 import numpy as np
-from sigchain import SignalData, DAG, ProcessingBlock
-from sigchain.blocks import RadarGenerator, PulseStacker, MatchedFilter, DopplerProcessor
+from sigchain import SignalData, Pipeline
+from sigchain.blocks import LFMGenerator, StackPulses, RangeCompress, DopplerCompress
 
 
 def test_signal_data():
@@ -27,54 +27,11 @@ def test_signal_data():
     print("  ✓ SignalData tests passed")
 
 
-def test_processing_block():
-    """Test ProcessingBlock base class."""
-    print("Testing ProcessingBlock...")
+def test_lfm_generator():
+    """Test LFMGenerator block."""
+    print("Testing LFMGenerator...")
     
-    class TestBlock(ProcessingBlock):
-        def process(self, signal_data):
-            # Simple pass-through
-            return signal_data
-    
-    block1 = TestBlock(name="Block1")
-    block2 = TestBlock(name="Block2")
-    
-    # Test connection
-    block1.connect(block2)
-    assert block2 in block1.outputs
-    assert block1 in block2.inputs
-    
-    print("  ✓ ProcessingBlock tests passed")
-
-
-def test_dag():
-    """Test DAG class."""
-    print("Testing DAG...")
-    
-    class TestBlock(ProcessingBlock):
-        def process(self, signal_data):
-            return signal_data
-    
-    dag = DAG()
-    block1 = TestBlock(name="Block1")
-    block2 = TestBlock(name="Block2")
-    block3 = TestBlock(name="Block3")
-    
-    # Add chain
-    dag.add_chain(block1, block2, block3)
-    
-    assert len(dag.blocks) == 3
-    assert block2 in block1.outputs
-    assert block3 in block2.outputs
-    
-    print("  ✓ DAG tests passed")
-
-
-def test_radar_generator():
-    """Test RadarGenerator block."""
-    print("Testing RadarGenerator...")
-    
-    radar_gen = RadarGenerator(
+    gen = LFMGenerator(
         num_pulses=64,
         pulse_duration=10e-6,
         sample_rate=10e6,
@@ -82,41 +39,41 @@ def test_radar_generator():
         target_doppler=1000.0
     )
     
-    signal_out = radar_gen.process()
+    signal_out = gen()
     
     assert signal_out.shape[0] == 64, f"Expected 64 pulses, got {signal_out.shape[0]}"
     assert signal_out.dtype == np.complex128
     assert 'reference_pulse' in signal_out.metadata
     assert 'target_delay' in signal_out.metadata
     
-    print("  ✓ RadarGenerator tests passed")
+    print("  ✓ LFMGenerator tests passed")
 
 
-def test_pulse_stacker():
-    """Test PulseStacker block."""
-    print("Testing PulseStacker...")
+def test_stack_pulses():
+    """Test StackPulses block."""
+    print("Testing StackPulses...")
     
     # Create test data
     data = np.random.randn(32, 50) + 1j * np.random.randn(32, 50)
     sig = SignalData(data=data, sample_rate=1e6, metadata={})
     
-    stacker = PulseStacker()
-    sig_out = stacker.process(sig)
+    stacker = StackPulses()
+    sig_out = stacker(sig)
     
     assert sig_out.shape == data.shape
     assert sig_out.metadata['pulse_stacked'] == True
     
-    print("  ✓ PulseStacker tests passed")
+    print("  ✓ StackPulses tests passed")
 
 
-def test_matched_filter():
-    """Test MatchedFilter block."""
-    print("Testing MatchedFilter...")
+def test_range_compress():
+    """Test RangeCompress block."""
+    print("Testing RangeCompress...")
     
     # Create test data with reference pulse
     num_pulses = 32
-    num_samples = 50
-    pulse_length = 20  # Reference pulse shorter than observation
+    num_samples = 100
+    pulse_length = 20
     data = np.random.randn(num_pulses, num_samples) + 1j * np.random.randn(num_pulses, num_samples)
     reference_pulse = np.random.randn(pulse_length) + 1j * np.random.randn(pulse_length)
     
@@ -126,20 +83,19 @@ def test_matched_filter():
         metadata={'reference_pulse': reference_pulse}
     )
     
-    mf = MatchedFilter()
-    sig_out = mf.process(sig)
+    rc = RangeCompress()
+    sig_out = rc(sig)
     
-    # With 'valid' mode: output length = num_samples - pulse_length + 1
-    expected_output_length = num_samples - pulse_length + 1
-    assert sig_out.shape == (num_pulses, expected_output_length)
+    # Output should be same or larger due to oversample_factor
+    assert sig_out.shape[0] == num_pulses
     assert sig_out.metadata['range_compressed'] == True
     
-    print("  ✓ MatchedFilter tests passed")
+    print("  ✓ RangeCompress tests passed")
 
 
-def test_doppler_processor():
-    """Test DopplerProcessor block."""
-    print("Testing DopplerProcessor...")
+def test_doppler_compress():
+    """Test DopplerCompress block."""
+    print("Testing DopplerCompress...")
     
     # Create test data
     num_pulses = 64
@@ -152,38 +108,61 @@ def test_doppler_processor():
         metadata={'pulse_repetition_interval': 1e-3}
     )
     
-    dp = DopplerProcessor(window='hann')
-    sig_out = dp.process(sig)
+    dc = DopplerCompress(window='hann')
+    sig_out = dc(sig)
     
-    assert sig_out.shape == data.shape
+    assert sig_out.shape[0] == num_pulses  # May be larger with oversample_factor
     assert sig_out.metadata['doppler_compressed'] == True
     assert 'doppler_frequencies' in sig_out.metadata
     
-    print("  ✓ DopplerProcessor tests passed")
+    print("  ✓ DopplerCompress tests passed")
+
+
+def test_pipeline():
+    """Test Pipeline execution."""
+    print("Testing Pipeline...")
+    
+    result = (Pipeline("Test")
+        .add(LFMGenerator(num_pulses=32, target_delay=2e-6, target_doppler=300.0))
+        .add(StackPulses())
+        .add(RangeCompress())
+        .add(DopplerCompress())
+        .run()
+    )
+    
+    assert result.shape[0] == 32  # num_pulses (may be larger with oversample_factor)
+    assert result.metadata['range_doppler_map'] == True
+    
+    # Verify there's a peak (target detection)
+    magnitude = np.abs(result.data)
+    max_val = np.max(magnitude)
+    mean_val = np.mean(magnitude)
+    assert max_val > 2 * mean_val, "Expected clear target peak"
+    
+    print("  ✓ Pipeline tests passed")
 
 
 def test_complete_pipeline():
-    """Test the complete radar processing pipeline."""
+    """Test the complete radar processing pipeline with direct chaining."""
     print("Testing complete pipeline...")
     
-    # Create minimal pipeline
-    radar_gen = RadarGenerator(
+    # Create blocks
+    gen = LFMGenerator(
         num_pulses=32,
         pulse_duration=5e-6,
         sample_rate=5e6,
         target_delay=2e-6,
         target_doppler=300.0
     )
+    stack = StackPulses()
+    range_comp = RangeCompress()
+    doppler_comp = DopplerCompress()
     
-    pulse_stacker = PulseStacker()
-    matched_filter = MatchedFilter()
-    doppler_processor = DopplerProcessor()
-    
-    # Execute pipeline
-    sig = radar_gen.process()
-    sig = pulse_stacker.process(sig)
-    sig = matched_filter.process(sig)
-    sig = doppler_processor.process(sig)
+    # Execute pipeline via direct chaining
+    sig = gen()
+    sig = stack(sig)
+    sig = range_comp(sig)
+    sig = doppler_comp(sig)
     
     # Verify output
     assert sig.shape[0] == 32  # num_pulses
@@ -196,7 +175,6 @@ def test_complete_pipeline():
     assert max_val > 2 * mean_val, "Expected clear target peak"
     
     print("  ✓ Complete pipeline tests passed")
-
 
 def run_all_tests():
     """Run all tests."""

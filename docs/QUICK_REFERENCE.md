@@ -60,56 +60,22 @@ range_doppler_map = result.data
 - ✅ Clean execution logging
 - ✅ Same SignalData consistency
 
-### 3. Traditional OOP with DAG (Legacy)
-
-**Most explicit** - Traditional object-oriented approach:
-
-```python
-from sigchain import DAG
-from sigchain.blocks import RadarGenerator, PulseStacker, MatchedFilter, DopplerProcessor
-
-# Create processing blocks
-radar_gen = RadarGenerator(num_pulses=128, target_delay=20e-6, target_doppler=1000.0)
-pulse_stacker = PulseStacker()
-matched_filter = MatchedFilter()
-doppler_processor = DopplerProcessor()
-
-# Build DAG
-dag = DAG()
-dag.add_chain(radar_gen, pulse_stacker, matched_filter, doppler_processor)
-
-# Execute manually
-signal = radar_gen.process()
-signal = pulse_stacker.process(signal)
-signal = matched_filter.process(signal)
-signal = doppler_processor.process(signal)
-
-range_doppler_map = signal.data
-```
-
-**Key Features:**
-- ✅ Explicit DAG structure
-- ✅ Traditional OOP patterns
-- ✅ Clear separation of concerns
-- ⚠️ More verbose
-
 ## Comparison
 
-| Feature | Clean DAG | Pipeline | Traditional |
-|---------|-----------|----------|-------------|
-| Lines of code | Fewest | Medium | Most |
-| Readability | Excellent | Good | Good |
-| Debugging | Easy | Excellent | Medium |
-| Type safety | ✅ | ✅ | ✅ |
-| Configuration | Dataclass | Dataclass | Constructor |
-| Execution | Direct call | `.run()` | `.process()` |
-| Best for | Simple chains | Complex pipelines | OOP codebases |
+| Feature | Direct Chaining | Pipeline |
+|---------|-----------------|----------|
+| Lines of code | Fewest | Medium |
+| Readability | Excellent | Good |
+| Debugging | Easy | Excellent |
+| Type safety | ✅ | ✅ |
+| Configuration | Dataclass | Dataclass |
+| Execution | Direct call | `.run()` |
+| Best for | Simple chains | Complex pipelines |
 
 ## Which Should I Use?
 
-- **Starting fresh?** → Use **Clean DAG** (Approach 1)
+- **Starting fresh?** → Use **Direct Chaining** (Approach 1)
 - **Complex pipeline with branching?** → Use **Pipeline** (Approach 2)
-- **Integrating with OOP code?** → Use **Traditional** (Approach 3)
 
 ## Quick Examples
 

@@ -48,43 +48,6 @@ custom = MyCustomBlock(gain=2.0, threshold=0.1)
 result = custom(input_signal)
 ```
 
-### 2. ProcessingBlock Subclass (Legacy)
-
-The traditional approach using class inheritance:
-
-```python
-from sigchain import ProcessingBlock, SignalData
-import numpy as np
-
-class MyLegacyBlock(ProcessingBlock):
-    """Legacy style processing block."""
-    
-    def __init__(self, gain=1.0, threshold=0.5, name=None):
-        super().__init__(name)
-        self.gain = gain
-        self.threshold = threshold
-    
-    def process(self, signal_data: SignalData) -> SignalData:
-        """Process the signal."""
-        processed = signal_data.data * self.gain
-        processed[np.abs(processed) < self.threshold] = 0
-        
-        metadata = signal_data.metadata.copy()
-        metadata['legacy_processed'] = True
-        
-        return SignalData(
-            data=processed,
-            sample_rate=signal_data.sample_rate,
-            metadata=metadata
-        )
-
-# Usage
-legacy = MyLegacyBlock(gain=2.0, threshold=0.1)
-result = legacy.process(input_signal)
-# OR
-result = legacy(input_signal)  # __call__ delegates to process()
-```
-
 ## Creating a Custom Block Package
 
 You can distribute your custom blocks as a separate Python package that depends on sigchain.

@@ -293,7 +293,6 @@ class ToMagnitudeDB:
         
         return SignalData(
             data=magnitude_db,
-            sample_rate=signal_data.sample_rate,
             metadata=metadata
         )
 
@@ -323,6 +322,5 @@ class Normalize:
         
         return SignalData(
             data=normalized,
-            sample_rate=signal_data.sample_rate,
             metadata=metadata
         )

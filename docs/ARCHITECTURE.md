@@ -4,7 +4,7 @@
 
 SigChain follows a clean separation between **framework** and **blocks**:
 
-- **Framework** (Core): The infrastructure for building pipelines (`SignalData`, `Pipeline`, `ProcessingBlock`)
+- **Framework** (Core): The infrastructure for building pipelines (`SignalData`, `Pipeline`)
 - **Blocks** (Extensions): Processing operations that transform signals
 
 This design allows the framework to remain minimal and focused while supporting unlimited extensibility.
@@ -33,7 +33,6 @@ This design allows the framework to remain minimal and focused while supporting 
 │   │  Core Components                                 │  │
 │   │  • SignalData: Type-safe data container         │  │
 │   │  • Pipeline: Execution and composition engine   │  │
-│   │  • ProcessingBlock: Base abstraction (optional) │  │
 │   └──────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -75,11 +74,6 @@ result = (Pipeline("Example")
     .run()
 )
 ```
-
-### 3. ProcessingBlock (Optional)
-**Purpose**: Abstract base for traditional OOP blocks
-
-**Note**: This is **optional**. The recommended approach is dataclass blocks that implement `__call__`.
 
 ## Block Extension Model
 
@@ -125,16 +119,12 @@ That's it! No complex interfaces or inheritance hierarchies.
 
 ```
 sigchain/
-├── __init__.py           # Exports: SignalData, Pipeline, ProcessingBlock
+├── __init__.py           # Exports: SignalData, Pipeline
 ├── core/
 │   ├── data.py          # SignalData class
-│   ├── pipeline.py      # Pipeline execution engine
-│   ├── block.py         # ProcessingBlock base (optional)
-│   └── dag.py           # DAG implementation (legacy)
+│   └── pipeline.py      # Pipeline execution engine
 └── blocks/              # Example blocks (can be in separate package)
-    ├── functional.py    # Example radar blocks
-    ├── radar_generator.py
-    └── ...
+    └── functional.py    # Example radar blocks
 ```
 
 ### Custom Block Package (e.g., sigchain-audio)
@@ -199,7 +189,6 @@ pipeline:
 The framework provides only essential infrastructure:
 - Data container (`SignalData`)
 - Execution engine (`Pipeline`)
-- Optional base class (`ProcessingBlock`)
 
 Everything else is an extension.
 
