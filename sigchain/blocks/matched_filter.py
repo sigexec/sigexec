@@ -1,7 +1,6 @@
 """Matched filter block for range compression."""
 
 import numpy as np
-from scipy import signal
 from ..core.block import ProcessingBlock
 from ..core.data import SignalData
 
@@ -25,11 +24,12 @@ class MatchedFilter(ProcessingBlock):
     
     def process(self, signal_data: SignalData) -> SignalData:
         """
-        Apply matched filtering to compress in range.
+        Apply matched filtering to compress in range using FFT-based processing.
         
-        Uses 'valid' mode correlation which returns only the portion where
-        the filter and signal fully overlap. For M input samples and N filter
-        samples, output has M-N+1 samples.
+        Performs elementwise multiplication in frequency domain:
+        FFT(output) = FFT(received_signal) * conj(FFT(ideal_waveform))
+        
+        This is the standard approach for radar range compression.
         
         Args:
             signal_data: Input signal data with pulse-stacked data
@@ -39,38 +39,36 @@ class MatchedFilter(ProcessingBlock):
         """
         data = signal_data.data
         
-        # Get reference pulse from metadata (conjugate for matched filter)
+        # Get reference pulse from metadata (ideal waveform with no noise/delay)
         if 'reference_pulse' in signal_data.metadata:
             reference_pulse = signal_data.metadata['reference_pulse']
         else:
             raise ValueError("Reference pulse not found in metadata")
         
-        # Matched filter is conjugated version of reference
-        # Note: scipy.signal.correlate already does time-reversal internally,
-        # so we only need to conjugate, not time-reverse
-        matched_filter = np.conj(reference_pulse)
-        
         # Apply matched filter to each pulse (row)
         num_pulses, num_samples = data.shape
-        pulse_length = len(reference_pulse)
         
-        # Use 'valid' mode: output length = num_samples - pulse_length + 1
-        output_length = num_samples - pulse_length + 1
-        filtered_data = np.zeros((num_pulses, output_length), dtype=data.dtype)
+        # FFT-based matched filtering
+        # 1. Take FFT of each pulse (received signal)
+        data_fft = np.fft.fft(data, axis=1)
         
-        for i in range(num_pulses):
-            # Use scipy's correlate with 'valid' mode
-            filtered_data[i, :] = signal.correlate(
-                data[i, :], 
-                matched_filter, 
-                mode='valid'
-            )
+        # 2. Take FFT of the ideal reference waveform (no noise, no delay)
+        # Pad reference pulse to match the observation window length
+        reference_padded = np.zeros(num_samples, dtype=reference_pulse.dtype)
+        reference_padded[:len(reference_pulse)] = reference_pulse
+        reference_fft = np.fft.fft(reference_padded)
+        
+        # 3. Elementwise multiplication with conjugate of reference FFT
+        filtered_fft = data_fft * np.conj(reference_fft)
+        
+        # 4. IFFT to get back to time domain
+        filtered_data = np.fft.ifft(filtered_fft, axis=1)
         
         # Create output with updated metadata
         metadata = signal_data.metadata.copy()
         metadata['range_compressed'] = True
         metadata['matched_filter_applied'] = True
-        metadata['num_range_bins'] = output_length
+        metadata['num_range_bins'] = num_samples
         
         return SignalData(
             data=filtered_data,
