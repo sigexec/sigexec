@@ -283,7 +283,7 @@ class Pipeline:
         Args:
             operation_factory: Function that takes a config and returns an operation
             configs: List of configurations to try
-            names: Optional names for each variant
+            names: Optional names for each variant (defaults to config values as strings)
             
         Returns:
             Self for method chaining
@@ -291,18 +291,23 @@ class Pipeline:
         Example:
             >>> results = (Pipeline()
             ...     .add(gen).add(stack)
-            ...     .variants(lambda w: RangeCompress(window=w), ['hamming', 'hann'])
-            ...     .variants(lambda w: DopplerCompress(window=w), ['hann', 'blackman'])
+            ...     .variants(lambda w: RangeCompress(window=w), 
+            ...               ['hamming', 'hann'],
+            ...               names=['Hamming', 'Hann'])
+            ...     .variants(lambda w: DopplerCompress(window=w), 
+            ...               ['hann', 'blackman'],
+            ...               names=['Hann', 'Blackman'])
             ...     .run()
             ... )
             >>> # Returns 4 results: all combinations
+            >>> # Access with: params['variant'][0], params['variant'][1], etc.
         """
         # Store variant specification
         variant_spec = {
             'type': 'variants',
             'factory': operation_factory,
             'configs': configs,
-            'names': names or [f"variant{i}" for i in range(len(configs))]
+            'names': names or [str(c) for c in configs]  # Use config values as default names
         }
         
         self.operations.append({
@@ -335,7 +340,7 @@ class Pipeline:
         verbose: bool = False,
         save_intermediate: bool = False,
         use_cache: Optional[bool] = None
-    ) -> Union[SignalData, List[Tuple[Dict[str, Any], SignalData]]]:
+    ) -> Union[SignalData, List[Tuple[Dict[str, List[str]], SignalData]]]:
         """
         Execute the pipeline with memoization.
         
@@ -353,7 +358,9 @@ class Pipeline:
             use_cache: Override cache setting for this run (default: use instance setting)
             
         Returns:
-            SignalData if no variants, or List of (params, result) tuples if variants exist
+            SignalData if no variants, or List of (params, result) tuples if variants exist.
+            When variants are present, params is a dict with:
+                params['variant']: List of variant names, e.g. ['Hamming', 'Hann']
         """
         # Check if pipeline has any variant operations
         variant_ops = [op for op in self.operations if op.get('variant_spec')]
@@ -427,10 +434,13 @@ class Pipeline:
         
         for config_combo in product(*all_configs):
             # Build params dict for this combination
-            params = {}
+            # Use a list structure: params["variant"] = [name1, name2, ...]
+            variant_names = []
             for i, (names, config) in enumerate(zip(all_names, config_combo)):
                 config_idx = all_configs[i].index(config)
-                params[f"variant{i+1}"] = names[config_idx]
+                variant_names.append(names[config_idx])
+            
+            params = {"variant": variant_names}
             
             if verbose:
                 print(f"\nExecuting combination: {params}")

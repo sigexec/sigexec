@@ -458,16 +458,19 @@ results = (Pipeline("Radar")
     .add(LFMGenerator(num_pulses=64, target_delay=2e-6, target_doppler=200.0))
     .add(StackPulses())
     .variants(lambda w: RangeCompress(window=w, oversample_factor=2), 
-              ['hamming', 'hann', 'blackman'])
+              ['hamming', 'hann', 'blackman'],
+              names=['Hamming', 'Hann', 'Blackman'])
     .variants(lambda w: DopplerCompress(window=w, oversample_factor=2), 
-              ['hamming', 'hann'])
+              ['hamming', 'hann'],
+              names=['Hamming', 'Hann'])
     .run()
 )
 
 # Results is a list of (params_dict, result_data) tuples
 # 3 range windows × 2 doppler windows = 6 total combinations
 for params, result in results:
-    print(f"Variant 1: {params['variant1']}, Variant 2: {params['variant2']}")
+    # Access variants as a list: params['variant'][0], params['variant'][1], etc.
+    print(f"Range: {params['variant'][0]}, Doppler: {params['variant'][1]}")
     print(f"  Peak SNR: {calculate_snr(result):.1f} dB")
 """
     page.add_syntax(code_example, language='python')
@@ -491,9 +494,11 @@ for params, result in results:
         ))
         .add(StackPulses())
         .variants(lambda w: RangeCompress(window=w, oversample_factor=2), 
-                 ['hamming', 'hann', 'blackman'])
+                 ['hamming', 'hann', 'blackman'],
+                 names=['Hamming', 'Hann', 'Blackman'])
         .variants(lambda w: DopplerCompress(window=w, oversample_factor=2), 
-                 ['hamming', 'hann'])
+                 ['hamming', 'hann'],
+                 names=['Hamming', 'Hann'])
         .run()
     )
     
@@ -505,8 +510,8 @@ for params, result in results:
         snr_db = 20 * np.log10(rdm_data[peak_idx] / np.median(rdm_data))
         
         comparison_data.append({
-            'Range Window': params['variant1'],
-            'Doppler Window': params['variant2'],
+            'Range Window': params['variant'][0],
+            'Doppler Window': params['variant'][1],
             'Peak SNR (dB)': f'{snr_db:.1f}',
             'Peak Location': f"{peak_idx}",
         })
@@ -516,7 +521,7 @@ for params, result in results:
     
     # Plot each result
     for params, result in results:
-        title = f"Range: {params['variant1']}, Doppler: {params['variant2']}"
+        title = f"Range: {params['variant'][0]}, Doppler: {params['variant'][1]}"
         page.add_header(title, level=2)
         fig = plot_range_doppler_map(result, title=title, colorscale="Greys", 
                                      height=500, use_db=True, db_range=50, mark_target=True)
