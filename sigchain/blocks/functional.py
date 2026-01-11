@@ -153,9 +153,6 @@ class RangeCompress:
                 window_func = np.ones(pulse_length)
             reference_pulse = reference_pulse * window_func
         
-        # Matched filter is conjugated reference (for correlation)
-        matched_filter = np.conj(reference_pulse)
-        
         num_pulses, num_samples = data.shape
         pulse_length = len(reference_pulse)
         
@@ -164,21 +161,21 @@ class RangeCompress:
         if self.oversample_factor > 1:
             # FFT-based processing with oversampling via zero-padding
             nfft = num_samples * self.oversample_factor
-            nfft_filter = pulse_length * self.oversample_factor
             
             filtered_data = np.zeros((num_pulses, num_samples), dtype=data.dtype)
             
             for i in range(num_pulses):
-                # Zero-pad both signal and filter in frequency domain for matched lengths
+                # FFT-based matched filtering:
+                # Output = IFFT( FFT(received) * conj(FFT(reference)) )
                 signal_fft = np.fft.fft(data[i, :], n=nfft)
-                filter_fft = np.fft.fft(matched_filter, n=nfft)
+                reference_fft = np.fft.fft(reference_pulse, n=nfft)
                 
-                # Correlation in frequency domain: multiply by conjugate
-                corr_fft = signal_fft * np.conj(filter_fft)
-                corr_result = np.fft.ifft(corr_fft)
+                # Matched filter: multiply by conjugate of reference FFT
+                filtered_fft = signal_fft * np.conj(reference_fft)
+                filtered_result = np.fft.ifft(filtered_fft)
                 
                 # Downsample back to original length by taking every Nth sample
-                filtered_data[i, :] = corr_result[::self.oversample_factor]
+                filtered_data[i, :] = filtered_result[::self.oversample_factor]
             
             output_length = num_samples
         else:
@@ -188,9 +185,10 @@ class RangeCompress:
             filtered_data = np.zeros((num_pulses, output_length), dtype=data.dtype)
             
             for i in range(num_pulses):
+                # Matched filter: correlation with conjugate of reference
                 filtered_data[i, :] = sp_signal.correlate(
                     data[i, :], 
-                    matched_filter, 
+                    np.conj(reference_pulse), 
                     mode='same'
                 )
         
