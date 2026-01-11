@@ -169,19 +169,19 @@ class RangeCompress:
                 # Output = IFFT( FFT(received) * conj(FFT(reference)) )
                 signal_fft = np.fft.fft(data[i, :], n=nfft)
                 
-                # Pad reference pulse to match signal length (zeros at end)
+                # Pad reference pulse to nfft length directly (zeros at end)
                 # Reference pulse is ideal chirp with NO delay (starts at t=0)
-                reference_padded = np.zeros(num_samples, dtype=reference_pulse.dtype)
+                reference_padded = np.zeros(nfft, dtype=reference_pulse.dtype)
                 reference_padded[:len(reference_pulse)] = reference_pulse
-                reference_fft = np.fft.fft(reference_padded, n=nfft)
+                reference_fft = np.fft.fft(reference_padded)
                 
                 # Matched filter: multiply by conjugate of reference FFT
                 # This gives circular correlation - peak appears at actual delay
                 filtered_fft = signal_fft * np.conj(reference_fft)
                 filtered_result = np.fft.ifft(filtered_fft)
                 
-                # Downsample back to original length by taking every Nth sample
-                filtered_data[i, :] = filtered_result[::self.oversample_factor]
+                # Take first num_samples (discard oversampled tail)
+                filtered_data[i, :] = filtered_result[:num_samples]
             
             output_length = num_samples
         else:
