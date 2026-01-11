@@ -878,7 +878,11 @@ for params, result in results:
             num_pulses=32, target_delay=delay, target_doppler=doppler, noise_power=0.01
         )(None)
         filepath = os.path.join(temp_dir, f'{name}.npz')
-        np.savez(filepath, data=signal.data, sample_rate=signal.sample_rate, metadata=signal.metadata)
+        # Save with metadata including reference pulse
+        np.savez(filepath, 
+                 data=signal.data, 
+                 sample_rate=signal.sample_rate,
+                 **{f'metadata_{k}': v for k, v in signal.metadata.items() if isinstance(v, (int, float, str, np.ndarray))})
     
     page.add_text(f"✓ Saved 3 signal files to temporary directory")
     
@@ -888,8 +892,11 @@ for params, result in results:
     def make_loader(filepath, scenario_name):
         def load(_):
             # This is only called when this variant executes
-            npz = np.load(filepath)
-            return SignalData(npz['data'], sample_rate=float(npz['sample_rate']))
+            npz = np.load(filepath, allow_pickle=True)
+            # Reconstruct metadata
+            metadata = {k.replace('metadata_', ''): v for k, v in npz.items() 
+                       if k.startswith('metadata_')}
+            return SignalData(npz['data'], sample_rate=float(npz['sample_rate']), metadata=metadata)
         return load
     
     # Build list of file paths and names
@@ -973,14 +980,24 @@ for params, result in results:
     file_a = os.path.join(temp_dir2, 'target1.npz')
     file_b = os.path.join(temp_dir2, 'target2.npz')
     
-    np.savez(file_a, data=sig_a.data, sample_rate=sig_a.sample_rate)
-    np.savez(file_b, data=sig_b.data, sample_rate=sig_b.sample_rate)
+    # Save with metadata
+    np.savez(file_a, 
+             data=sig_a.data, 
+             sample_rate=sig_a.sample_rate,
+             **{f'metadata_{k}': v for k, v in sig_a.metadata.items() if isinstance(v, (int, float, str, np.ndarray))})
+    np.savez(file_b, 
+             data=sig_b.data, 
+             sample_rate=sig_b.sample_rate,
+             **{f'metadata_{k}': v for k, v in sig_b.metadata.items() if isinstance(v, (int, float, str, np.ndarray))})
     
     # Lazy loader factory
     def make_file_loader(filepath):
         def load(_):
-            npz = np.load(filepath)
-            return SignalData(npz['data'], sample_rate=float(npz['sample_rate']))
+            npz = np.load(filepath, allow_pickle=True)
+            # Reconstruct metadata
+            metadata = {k.replace('metadata_', ''): v for k, v in npz.items() 
+                       if k.startswith('metadata_')}
+            return SignalData(npz['data'], sample_rate=float(npz['sample_rate']), metadata=metadata)
         return load
     
     # Combine lazy loading with processing variants
