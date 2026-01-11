@@ -64,8 +64,10 @@ def test_range_compress():
     
     sig = SignalData(
         data=data,
-        sample_rate=1e6,
-        metadata={'reference_pulse': reference_pulse}
+        metadata={
+            'sample_rate': 1e6,
+            'reference_pulse': reference_pulse
+        }
     )
     
     compress = RangeCompress()
@@ -87,8 +89,10 @@ def test_doppler_compress():
     data = np.random.randn(32, 64) + 1j * np.random.randn(32, 64)
     sig = SignalData(
         data=data,
-        sample_rate=1e6,
-        metadata={'pulse_repetition_interval': 1e-3}
+        metadata={
+            'sample_rate': 1e6,
+            'pulse_repetition_interval': 1e-3
+        }
     )
     
     compress = DopplerCompress(window='hann')
@@ -107,7 +111,7 @@ def test_to_magnitude_db():
     print("Testing ToMagnitudeDB...")
     
     data = np.random.randn(16, 32) + 1j * np.random.randn(16, 32)
-    sig = SignalData(data=data, sample_rate=1e6, metadata={})
+    sig = SignalData(data=data, metadata={'sample_rate': 1e6})
     
     to_db = ToMagnitudeDB()
     result = to_db(sig)
@@ -125,7 +129,7 @@ def test_normalize():
     print("Testing Normalize...")
     
     data = np.random.randn(16, 32) * 10 + 5
-    sig = SignalData(data=data, sample_rate=1e6, metadata={})
+    sig = SignalData(data=data, metadata={'sample_rate': 1e6})
     
     normalize = Normalize(method='max')
     result = normalize(sig)

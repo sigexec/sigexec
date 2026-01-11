@@ -26,7 +26,6 @@ class TestAmplifier:
         
         return SignalData(
             data=amplified,
-            sample_rate=signal_data.sample_rate,
             metadata=metadata
         )
 
@@ -47,7 +46,6 @@ class TestAttenuator:
         
         return SignalData(
             data=attenuated,
-            sample_rate=signal_data.sample_rate,
             metadata=metadata
         )
 
@@ -67,8 +65,8 @@ class TestSignalGenerator:
         
         return SignalData(
             data=signal,
-            sample_rate=self.sample_rate,
             metadata={
+                'sample_rate': self.sample_rate,
                 'frequency': self.frequency,
                 'duration': self.duration,
                 'generated': True,
@@ -97,7 +95,6 @@ class TestStatistics:
         
         return SignalData(
             data=data,  # Unchanged
-            sample_rate=signal_data.sample_rate,
             metadata=metadata
         )
 

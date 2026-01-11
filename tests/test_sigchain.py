@@ -13,7 +13,7 @@ def test_signal_data():
     
     # Create signal data
     data = np.random.randn(10, 20) + 1j * np.random.randn(10, 20)
-    sig = SignalData(data=data, sample_rate=1e6, metadata={'test': True})
+    sig = SignalData(data=data, metadata={'sample_rate': 1e6, 'test': True})
     
     assert sig.shape == (10, 20), f"Expected shape (10, 20), got {sig.shape}"
     assert sig.dtype == complex, f"Expected complex dtype, got {sig.dtype}"
@@ -55,7 +55,7 @@ def test_stack_pulses():
     
     # Create test data
     data = np.random.randn(32, 50) + 1j * np.random.randn(32, 50)
-    sig = SignalData(data=data, sample_rate=1e6, metadata={})
+    sig = SignalData(data=data, metadata={'sample_rate': 1e6})
     
     stacker = StackPulses()
     sig_out = stacker(sig)
@@ -79,8 +79,10 @@ def test_range_compress():
     
     sig = SignalData(
         data=data,
-        sample_rate=1e6,
-        metadata={'reference_pulse': reference_pulse}
+        metadata={
+            'sample_rate': 1e6,
+            'reference_pulse': reference_pulse
+        }
     )
     
     rc = RangeCompress()
@@ -104,8 +106,10 @@ def test_doppler_compress():
     
     sig = SignalData(
         data=data,
-        sample_rate=1e6,
-        metadata={'pulse_repetition_interval': 1e-3}
+        metadata={
+            'sample_rate': 1e6,
+            'pulse_repetition_interval': 1e-3
+        }
     )
     
     dc = DopplerCompress(window='hann')

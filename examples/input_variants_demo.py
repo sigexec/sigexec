@@ -117,7 +117,7 @@ import numpy as np
 def make_loader(filename):
     def load(_):
         data = np.load(filename)  # Loaded on demand, not upfront
-        return SignalData(data, sample_rate=20e6)
+        return SignalData(data, metadata={'sample_rate': 20e6})
     return load
 
 # Process multiple files through the same pipeline
@@ -173,7 +173,8 @@ for params, result in results:
             npz = np.load(filepath, allow_pickle=True)
             metadata = {k.replace('metadata_', ''): v for k, v in npz.items() 
                        if k.startswith('metadata_')}
-            return SignalData(npz['data'], sample_rate=float(npz['sample_rate']), metadata=metadata)
+            metadata['sample_rate'] = float(npz['sample_rate'])
+            return SignalData(npz['data'], metadata=metadata)
         return load
     
     # Build list of file paths and names
@@ -215,7 +216,7 @@ from sigchain import Pipeline
 def make_loader(filename):
     def load(_):
         data = np.load(filename)
-        return SignalData(data, sample_rate=20e6)
+        return SignalData(data, metadata={'sample_rate': 20e6})
     return load
 
 # 3 files × 2 range windows × 2 Doppler windows = 12 total combinations
@@ -273,7 +274,8 @@ for params, result in results:
             npz = np.load(filepath, allow_pickle=True)
             metadata = {k.replace('metadata_', ''): v for k, v in npz.items() 
                        if k.startswith('metadata_')}
-            return SignalData(npz['data'], sample_rate=float(npz['sample_rate']), metadata=metadata)
+            metadata['sample_rate'] = float(npz['sample_rate'])
+            return SignalData(npz['data'], metadata=metadata)
         return load
     
     # Combine lazy loading with processing variants

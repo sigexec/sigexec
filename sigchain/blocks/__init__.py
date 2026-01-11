@@ -16,4 +16,5 @@ from .radar_generator import LFMGenerator
 from .pulse_stacker import StackPulses
 from .matched_filter import RangeCompress
 from .doppler_processor import DopplerCompress
-from .functional import ToMagnitudeDB, Normalize
+from .to_magnitude_db import ToMagnitudeDB
+from .normalize import Normalize

@@ -25,7 +25,7 @@ def expensive_load_data(delay: float = 2.0):
     def load(_):
         time.sleep(delay)
         data = np.random.randn(1000) + 1j * np.random.randn(1000)
-        return SignalData(data, sample_rate=1e6, metadata={'stage': 'loaded'})
+        return SignalData(data, metadata={'sample_rate': 1e6, 'stage': 'loaded'})
     return load
 
 

@@ -47,7 +47,7 @@ def apply_threshold(signal_data: SignalData, threshold_factor=0.1) -> SignalData
     data = signal_data.data.copy()
     threshold = threshold_factor * np.max(np.abs(data))
     data[np.abs(data) < threshold] = 0
-    return SignalData(data, signal_data.sample_rate, signal_data.metadata)
+    return SignalData(data, signal_data.metadata)
 
 # Define another custom block - normalize signal
 def normalize_signal(signal_data: SignalData) -> SignalData:
@@ -55,7 +55,7 @@ def normalize_signal(signal_data: SignalData) -> SignalData:
     max_val = np.max(np.abs(data))
     if max_val > 0:
         data = data / max_val
-    return SignalData(data, signal_data.sample_rate, signal_data.metadata)
+    return SignalData(data, signal_data.metadata)
 
 # Compose pipeline with custom blocks
 page = sd.Page('demo', 'Demo')
@@ -81,7 +81,7 @@ result = (Pipeline("CustomDemo")
         data[np.abs(data) < threshold] = 0
         metadata = signal_data.metadata.copy()
         metadata['threshold_applied'] = threshold
-        return SignalData(data, signal_data.sample_rate, metadata)
+        return SignalData(data, metadata)
     
     def normalize_signal(signal_data: SignalData) -> SignalData:
         """Normalize signal to max amplitude of 1."""
@@ -92,7 +92,7 @@ result = (Pipeline("CustomDemo")
         metadata = signal_data.metadata.copy()
         metadata['normalized'] = True
         metadata['original_max'] = max_val
-        return SignalData(data, signal_data.sample_rate, metadata)
+        return SignalData(data, metadata)
     
     # Build pipeline with custom blocks
     page.add_header("Pipeline Execution", level=2)
