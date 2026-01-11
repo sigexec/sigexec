@@ -42,19 +42,21 @@ class Pipeline:
     # Class-level cache shared across all pipeline instances
     _global_cache: Dict[str, SignalData] = {}
     
-    def __init__(self, name: str = "Pipeline", enable_cache: bool = True):
+    def __init__(self, name: str = "Pipeline", enable_cache: bool = True, input_data: Optional[SignalData] = None):
         """
         Initialize a new pipeline.
         
         Args:
             name: Optional name for the pipeline
             enable_cache: Whether to enable memoization (default: True)
+            input_data: Optional initial data to process
         """
         self.name = name
         self.operations: List[Dict[str, Any]] = []
         self._enable_cache = enable_cache
         self._intermediate_results: List[SignalData] = []
         self._parent_pipeline: Optional['Pipeline'] = None
+        self._input_data = input_data
     
     def _get_cache_key(self, up_to_index: int) -> str:
         """
@@ -77,6 +79,28 @@ class Pipeline:
         
         key = "->".join(ops_repr)
         return key
+    
+    def input_data(self, data: SignalData) -> 'Pipeline':
+        """
+        Set the input data for the pipeline.
+        
+        Args:
+            data: SignalData to process
+            
+        Returns:
+            Self for method chaining
+            
+        Example:
+            >>> my_data = SignalData(data_array, sample_rate=20e6)
+            >>> result = (Pipeline()
+            ...     .input_data(my_data)
+            ...     .add(RangeCompress())
+            ...     .add(DopplerCompress())
+            ...     .run()
+            ... )
+        """
+        self._input_data = data
+        return self
     
     def add(
         self,
@@ -365,9 +389,12 @@ class Pipeline:
         # Check if pipeline has any variant operations
         variant_ops = [op for op in self.operations if op.get('variant_spec')]
         
+        # Use provided initial_data, or fall back to self._input_data
+        data = initial_data if initial_data is not None else self._input_data
+        
         if not variant_ops:
             # No variants - normal execution
-            current_data = initial_data
+            current_data = data
             cache_enabled = use_cache if use_cache is not None else self._enable_cache
             
             if save_intermediate:
@@ -446,7 +473,7 @@ class Pipeline:
                 print(f"\nExecuting combination: {params}")
             
             # Execute pipeline for this combination
-            current_data = initial_data
+            current_data = data
             variant_idx = 0
             op_global_idx = 0
             
@@ -549,15 +576,16 @@ class Pipeline:
         return f"Pipeline('{self.name}'{cache_status}, ops={' -> '.join(op_names)})"
 
 
-def create_pipeline(name: str = "Pipeline", enable_cache: bool = True) -> Pipeline:
+def create_pipeline(name: str = "Pipeline", enable_cache: bool = True, input_data: Optional[SignalData] = None) -> Pipeline:
     """
     Factory function to create a new pipeline.
     
     Args:
         name: Optional name for the pipeline
         enable_cache: Whether to enable memoization
+        input_data: Optional initial data to process
         
     Returns:
         A new Pipeline instance
     """
-    return Pipeline(name, enable_cache=enable_cache)
+    return Pipeline(name, enable_cache=enable_cache, input_data=input_data)
