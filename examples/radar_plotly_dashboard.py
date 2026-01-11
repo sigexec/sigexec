@@ -128,189 +128,85 @@ def create_radar_demo_dashboard(
     config_df = pd.DataFrame(config_data)
     page.add_table(config_df)
     
-    # Add code example before the demo
+    # Add code example
     page.add_header("Code Example", level=2)
     page.add_text("""
     Here's how to reproduce this processing pipeline using sigchain:
     """)
     
     code_example = f"""
+import staticdash as sd
 from sigchain import Pipeline
 from sigchain.blocks import LFMGenerator, StackPulses, RangeCompress, DopplerCompress
+from sigchain.diagnostics import plot_timeseries, plot_range_doppler_map
 
-# Create processing pipeline
+page = sd.Page('radar', 'Radar')
+page.add_header("Radar Processing", level=1)
+
 result = (Pipeline("Radar")
-    .add(LFMGenerator(
-        num_pulses={num_pulses},
-        target_delay={target_delay},
-        target_doppler={target_doppler},
-    ))
+    .add(LFMGenerator(num_pulses={num_pulses}, target_delay={target_delay}, 
+                       target_doppler={target_doppler}))
+    .tap(lambda s: page.add_plot(plot_timeseries(s, title="Generated")))
     .add(StackPulses())
     .add(RangeCompress(window='hamming', oversample_factor=2))
     .add(DopplerCompress(window='hann', oversample_factor=2))
+    .tap(lambda s: page.add_plot(plot_range_doppler_map(s, title="RDM")))
     .run()
 )
-
-# Result contains the Range-Doppler Map
-rdm = result.data
 """
     page.add_syntax(code_example, language='python')
     
-    # Stage 1: Generate LFM Signal
-    page.add_header("Stage 1: LFM Signal Generation", level=2)
-    page.add_text("""
-    Generate Linear Frequency Modulated (LFM) chirp pulses with simulated
-    target return (delayed and Doppler shifted) plus noise.
-    """)
+    # Build the pipeline with inline plotting
+    page.add_header("Processing Pipeline", level=2)
     
-    gen = LFMGenerator(
-        num_pulses=num_pulses,
-        pulse_duration=pulse_duration_us * 1e-6,
-        pulse_repetition_interval=pri_ms * 1e-3,
-        sample_rate=sample_rate_mhz * 1e6,
-        bandwidth=bandwidth_mhz * 1e6,
-        target_delay=target_delay,
-        target_doppler=target_doppler,
-        noise_power=noise_power,
+    signal_rdm = (Pipeline("Radar")
+        .add(LFMGenerator(
+            num_pulses=num_pulses,
+            pulse_duration=pulse_duration_us * 1e-6,
+            pulse_repetition_interval=pri_ms * 1e-3,
+            sample_rate=sample_rate_mhz * 1e6,
+            bandwidth=bandwidth_mhz * 1e6,
+            target_delay=target_delay,
+            target_doppler=target_doppler,
+            noise_power=noise_power,
+        ), name="Generate")
+        .tap(lambda s: page.add_header("Stage 1: LFM Signal Generation", level=2))
+        .tap(lambda s: page.add_text("""
+            Generate Linear Frequency Modulated (LFM) chirp pulses with simulated
+            target return (delayed and Doppler shifted) plus noise.
+        """))
+        .tap(lambda s: page.add_plot(plot_timeseries(s, title="Generated LFM Pulse", 
+              show_real=True, show_imag=True, show_magnitude=True, height=400), height=400))
+        
+        .add(StackPulses(), name="Stack")
+        .tap(lambda s: page.add_header("Stage 2: Pulse Stacking", level=2))
+        .tap(lambda s: page.add_text("""
+            Organize the pulses into a 2D matrix (pulses × samples) for coherent processing.
+        """))
+        .tap(lambda s: page.add_plot(plot_pulse_matrix(s, title=f"Stacked Pulses ({num_pulses} pulses)", 
+              colorscale="Greys", height=500, use_db=True), height=500))
+        
+        .add(RangeCompress(window='hamming', oversample_factor=2), name="RangeCompress")
+        .tap(lambda s: page.add_header("Stage 3: Range Compression", level=2))
+        .tap(lambda s: page.add_text("""
+            Apply matched filtering using the transmitted waveform. A Hamming window 
+            is applied to reduce sidelobe levels.
+        """))
+        .tap(lambda s: page.add_plot(plot_pulse_matrix(s, title="Range-Compressed Pulses", 
+              colorscale="Greys", height=500, use_db=True), height=500))
+        .tap(lambda s: page.add_plot(plot_range_profile(s, title="Range Profile (Averaged)", 
+              pulse_index=None, use_db=True, height=400), height=400))
+        
+        .add(DopplerCompress(window='hann', oversample_factor=2), name="DopplerCompress")
+        .tap(lambda s: page.add_header("Stage 4: Doppler Compression", level=2))
+        .tap(lambda s: page.add_text("""
+            Apply FFT along the pulse dimension to resolve Doppler frequency.
+            This creates the final Range-Doppler Map (RDM).
+        """))
+        .tap(lambda s: page.add_plot(plot_range_doppler_map(s, title="Range-Doppler Map", 
+              colorscale="Greys", height=600, use_db=True, db_range=50, mark_target=True), height=600))
+        .run()
     )
-    
-    signal_generated = gen()
-    
-    # Plot generated waveform (single pulse)
-    fig1 = plot_timeseries(
-        signal_generated,
-        title="Generated LFM Pulse (First Pulse)",
-        show_real=True,
-        show_imag=True,
-        show_magnitude=True,
-        height=400,
-    )
-    page.add_plot(fig1, height=400)
-    
-    page.add_text("""
-    The plot above shows one complete pulse. The blue/red lines show the
-    real and imaginary components of the complex signal, while the green
-    line shows the magnitude envelope.
-    """)
-    
-    # Plot spectrum of reference pulse
-    reference_pulse = signal_generated.metadata['reference_pulse']
-    ref_signal = SignalData(
-        data=reference_pulse,
-        sample_rate=signal_generated.sample_rate,
-        metadata={}
-    )
-    fig2 = plot_spectrum(ref_signal, title="Reference Pulse Spectrum", height=350)
-    page.add_plot(fig2, height=350)
-    
-    page.add_text("""
-    The frequency spectrum shows the 5 MHz bandwidth of the LFM chirp.
-    This wideband signal provides good range resolution after matched filtering.
-    """)
-    
-    # Stage 2: Stack Pulses
-    page.add_header("Stage 2: Pulse Stacking", level=2)
-    page.add_text("""
-    Organize the pulses into a 2D matrix (pulses × samples) for coherent processing.
-    This allows us to process range and Doppler dimensions separately.
-    """)
-    
-    stack = StackPulses()
-    signal_stacked = stack(signal_generated)
-    
-    # Visualize stacked pulses
-    fig3 = plot_pulse_matrix(
-        signal_stacked,
-        title=f"Stacked Pulses ({num_pulses} pulses × {signal_stacked.shape[1]} samples)",
-        colorscale="Greys",
-        height=500,
-        use_db=True,
-    )
-    page.add_plot(fig3, height=500)
-    
-    page.add_text(f"""
-    The heatmap shows all {num_pulses} pulses stacked vertically. You can see:
-    - The delayed target return (vertical bright region around sample {int(target_delay * signal_generated.sample_rate)})
-    - Background noise across the entire matrix
-    - Each horizontal line represents one pulse
-    """)
-    
-    # Stage 3: Range Compression (Matched Filtering)
-    page.add_header("Stage 3: Range Compression", level=2)
-    page.add_text("""
-    Apply matched filtering using the transmitted waveform as the filter.
-    This correlates the received signal with the known transmitted pulse,
-    compressing it in time and improving SNR. A Hamming window is applied
-    to the matched filter to reduce sidelobe levels.
-    """)
-    
-    range_comp = RangeCompress(window='hamming', oversample_factor=2)
-    signal_range_compressed = range_comp(signal_stacked)
-    
-    # Plot range-compressed pulse matrix
-    fig4 = plot_pulse_matrix(
-        signal_range_compressed,
-        title="Range-Compressed Pulses",
-        colorscale="Greys",
-        height=500,
-        use_db=True,
-    )
-    page.add_plot(fig4, height=500)
-    
-    page.add_text("""
-    After matched filtering, the target appears as a sharp peak in the range
-    dimension. The SNR is significantly improved compared to the raw data.
-    """)
-    
-    # Plot single range profile
-    fig5 = plot_range_profile(
-        signal_range_compressed,
-        title="Range Profile (Averaged over all pulses)",
-        pulse_index=None,  # Average
-        use_db=True,
-        height=400,
-    )
-    page.add_plot(fig5, height=400)
-    
-    page.add_text("""
-    The range profile shows the target as a clear peak at the expected range.
-    The red dashed line marks the true target location.
-    """)
-    
-    # Stage 4: Doppler Compression (FFT)
-    page.add_header("Stage 4: Doppler Compression", level=2)
-    page.add_text("""
-    Apply FFT along the pulse dimension to resolve Doppler frequency.
-    This creates the final Range-Doppler Map (RDM) that shows both
-    target range and velocity. A Hann window is applied to reduce spectral leakage,
-    and 2x oversampling interpolates the Doppler response.
-    """)
-    
-    doppler_comp = DopplerCompress(window='hann', oversample_factor=2)
-    signal_rdm = doppler_comp(signal_range_compressed)
-    
-    # Plot final Range-Doppler Map
-    fig6 = plot_range_doppler_map(
-        signal_rdm,
-        title="Range-Doppler Map",
-        colorscale="Greys",
-        height=600,
-        use_db=True,
-        db_range=50,
-        mark_target=True,
-    )
-    page.add_plot(fig6, height=600)
-    
-    page.add_text("""
-    **This is the final result!** The Range-Doppler Map shows:
-    - **X-axis**: Target range (distance from radar)
-    - **Y-axis**: Doppler frequency (related to target velocity)
-    - **Color**: Signal strength in dB
-    - **Black Box**: True target location
-    
-    The bright spot near the target marker is our detected target.
-    The background shows the noise floor and any sidelobes from the processing.
-    """)
     
     # Summary statistics
     page.add_header("Processing Summary", level=2)
