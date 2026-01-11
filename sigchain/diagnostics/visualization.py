@@ -297,7 +297,12 @@ def plot_range_doppler_map(
         x=range_axis,
         y=doppler_axis,
         colorscale=colorscale,
-        colorbar=dict(title=colorbar_title),
+        colorbar=dict(
+            title=colorbar_title,
+            orientation='h',
+            y=-0.2,
+            yanchor='top',
+        ),
     ))
     
     # Mark target if available
@@ -313,7 +318,7 @@ def plot_range_doppler_map(
                 symbol='square',
                 size=15,
                 color='rgba(0,0,0,0)',  # Transparent fill
-                line=dict(width=2, color='black'),
+                line=dict(width=3, color='magenta'),
             ),
             name='True Target',
             showlegend=True,

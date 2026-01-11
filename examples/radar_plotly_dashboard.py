@@ -365,42 +365,6 @@ rdm = result.data
     results_df = pd.DataFrame(results_data)
     page.add_table(results_df)
     
-    page.add_text(f"""
-    **Processing Stages Completed:**
-    1. ✓ LFM Signal Generation ({num_pulses} pulses)
-    2. ✓ Pulse Stacking (2D matrix organization)
-    3. ✓ Range Compression (Matched filtering with Hamming window, 2x oversampling)
-    4. ✓ Doppler Compression (FFT processing with Hann window, 2x oversampling)
-    """)
-    
-    # Add code example
-    page.add_header("Code Example", level=2)
-    page.add_text("""
-    Here's how to reproduce this processing pipeline using sigchain:
-    """)
-    
-    code_example = f"""
-from sigchain import Pipeline
-from sigchain.blocks import LFMGenerator, StackPulses, RangeCompress, DopplerCompress
-
-# Create processing pipeline
-result = (Pipeline("Radar")
-    .add(LFMGenerator(
-        num_pulses={num_pulses},
-        target_delay={target_delay},
-        target_doppler={target_doppler},
-    ))
-    .add(StackPulses())
-    .add(RangeCompress())
-    .add(DopplerCompress(window='hann'))
-    .run()
-)
-
-# Result contains the Range-Doppler Map
-rdm = result.data
-"""
-    page.add_syntax(code_example, language='python')
-    
     # Add page to dashboard and publish
     dashboard.add_page(page)
     
