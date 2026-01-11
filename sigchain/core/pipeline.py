@@ -102,6 +102,41 @@ class Pipeline:
         self._input_data = data
         return self
     
+    def input_variants(
+        self,
+        signals: List[SignalData],
+        names: Optional[List[str]] = None
+    ) -> 'Pipeline':
+        """
+        Run the same pipeline over multiple different input signals.
+        
+        This is a convenience wrapper around .variants() specifically for varying input data.
+        Each signal will be processed through the entire pipeline.
+        
+        Args:
+            signals: List of SignalData objects to process
+            names: Optional names for each signal variant
+            
+        Returns:
+            Self for method chaining
+            
+        Example:
+            >>> # Process multiple signals through the same pipeline
+            >>> results = (Pipeline()
+            ...     .input_variants([signal1, signal2, signal3],
+            ...                    names=['Dataset A', 'Dataset B', 'Dataset C'])
+            ...     .add(RangeCompress())
+            ...     .add(DopplerCompress())
+            ...     .run()
+            ... )
+            >>> # Returns list of (params, result) tuples, one for each input signal
+        """
+        # Create a factory that returns a function which ignores input and returns the specific signal
+        def signal_factory(sig: SignalData) -> Callable[[SignalData], SignalData]:
+            return lambda _: sig
+        
+        return self.variants(signal_factory, signals, names=names)
+    
     def add(
         self,
         operation: Callable[[SignalData], SignalData],
@@ -464,7 +499,8 @@ class Pipeline:
             # Use a list structure: params["variant"] = [name1, name2, ...]
             variant_names = []
             for i, (names, config) in enumerate(zip(all_names, config_combo)):
-                config_idx = all_configs[i].index(config)
+                # Use identity comparison for objects that might not support == properly
+                config_idx = next(idx for idx, c in enumerate(all_configs[i]) if c is config)
                 variant_names.append(names[config_idx])
             
             params = {"variant": variant_names}
@@ -477,11 +513,16 @@ class Pipeline:
             variant_idx = 0
             op_global_idx = 0
             
+            # Build a unique key for this variant combination to avoid cache collisions
+            combo_key = '_'.join([str(id(c)) for c in config_combo])
+            
             for seg_type, seg_data in segments:
                 if seg_type == 'normal':
                     # Execute normal operations
                     for op in seg_data:
-                        cache_key = self._get_cache_key(op_global_idx)
+                        # Include combo_key in cache key to avoid collisions between variants
+                        base_cache_key = self._get_cache_key(op_global_idx)
+                        cache_key = f"{base_cache_key}_{combo_key}"
                         
                         if cache_enabled and op.get('cacheable', True) and cache_key in Pipeline._global_cache:
                             if verbose:
@@ -505,9 +546,16 @@ class Pipeline:
                     # Create cache key including the variant config AND input data
                     # This ensures different combinations don't incorrectly reuse cached results
                     input_hash = hash(current_data.data.tobytes() if current_data is not None else "none")
+                    
+                    # For config hash, use id() if it's a complex object like SignalData
+                    try:
+                        config_hash = hash(str(config))
+                    except:
+                        config_hash = id(config)
+                    
                     cache_key_parts = [
                         str(self._get_cache_key(op_global_idx)),
-                        str(hash(str(config))),
+                        str(config_hash),
                         str(input_hash)
                     ]
                     cache_key = '_'.join(cache_key_parts)
