@@ -183,22 +183,68 @@ class Pipeline:
     
     def plot(
         self,
-        plotter: Callable[[SignalData], None],
-        name: Optional[str] = None
+        page=None,
+        plotter: Optional[Callable[[SignalData], None]] = None,
+        plot_type: Optional[str] = None,
+        title: str = "Plot",
+        name: Optional[str] = None,
+        **plot_kwargs
     ) -> 'Pipeline':
         """
         Add a plotting function that visualizes the signal without modifying it.
         
-        This is an alias for tap() with a more descriptive name for plotting.
+        Can be used in two ways:
+        1. With a staticdash page and plot_type:
+           .plot(page, plot_type='timeseries', title="My Plot")
+        2. With a custom plotter function:
+           .plot(plotter=my_plot_function)
         
         Args:
-            plotter: Function that plots SignalData
+            page: staticdash Page object to add plot to
+            plotter: Custom function that plots SignalData
+            plot_type: Type of plot ('timeseries', 'pulse_matrix', 'range_profile', 
+                      'range_doppler_map', 'spectrum')
+            title: Plot title
             name: Optional name for this operation
+            **plot_kwargs: Additional keyword arguments for the plot function
             
         Returns:
             Self for method chaining
         """
-        return self.tap(plotter, name=name or "plot")
+        if page is not None and plot_type is not None:
+            # Import here to avoid circular dependency
+            from ..diagnostics.plot_blocks import (
+                add_timeseries_plot,
+                add_pulse_matrix_plot,
+                add_range_profile_plot,
+                add_range_doppler_map_plot,
+                add_spectrum_plot,
+            )
+            
+            plot_functions = {
+                'timeseries': add_timeseries_plot,
+                'pulse_matrix': add_pulse_matrix_plot,
+                'range_profile': add_range_profile_plot,
+                'range_doppler_map': add_range_doppler_map_plot,
+                'spectrum': add_spectrum_plot,
+            }
+            
+            if plot_type not in plot_functions:
+                raise ValueError(f"Unknown plot_type '{plot_type}'. Must be one of: {list(plot_functions.keys())}")
+            
+            plot_func = plot_functions[plot_type]
+            
+            def plotter_wrapper(signal_data: SignalData) -> None:
+                plot_func(page, signal_data, title=title, **plot_kwargs)
+            
+            return self.tap(plotter_wrapper, name=name or f"plot_{plot_type}")
+        
+        elif plotter is not None:
+            # Use custom plotter function
+            return self.tap(plotter, name=name or "plot")
+        
+        else:
+            raise ValueError("Must provide either (page and plot_type) or plotter function")
     
     def branch(self, name: Optional[str] = None) -> 'Pipeline':
         """
