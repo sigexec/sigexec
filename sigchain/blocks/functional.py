@@ -206,7 +206,7 @@ class RangeCompress:
         
         return SignalData(
             data=filtered_data,
-            sample_rate=signal_data.sample_rate * self.oversample_factor,
+            sample_rate=signal_data.sample_rate,  # Keep original sample rate (data was downsampled)
             metadata=metadata
         )
 
