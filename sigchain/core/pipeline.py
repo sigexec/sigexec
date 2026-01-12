@@ -485,6 +485,9 @@ class Pipeline:
         
         return self
     
+    # Alias for more intuitive usage (plural form)
+    variants = variant
+    
     def get_intermediate_results(self) -> List[SignalData]:
         """
         Get all intermediate results from the last run.

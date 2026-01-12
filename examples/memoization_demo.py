@@ -20,7 +20,7 @@ except ImportError:
 
 
 # Create simple processing blocks with artificial delays
-def expensive_load_data(delay: float = 2.0):
+def expensive_load_data(delay: float = 0.2):
     """Simulates expensive data loading (e.g., from disk/network)."""
     def load(_):
         time.sleep(delay)
@@ -29,14 +29,14 @@ def expensive_load_data(delay: float = 2.0):
     return load
 
 
-def expensive_preprocessing(delay: float = 1.5):
+def expensive_preprocessing(delay: float = 0.15):
     """Simulates expensive preprocessing (e.g., filtering, calibration)."""
     def preprocess(signal_data: SignalData):
         time.sleep(delay)
         data = signal_data.data * np.exp(1j * 0.1)  # Simple phase shift
         metadata = signal_data.metadata.copy()
         metadata['stage'] = 'preprocessed'
-        return SignalData(data, signal_data.sample_rate, metadata)
+        return SignalData(data, metadata)
     return preprocess
 
 
@@ -48,7 +48,7 @@ def cheap_operation(label: str, factor: float = 1.0):
         metadata = signal_data.metadata.copy()
         metadata['stage'] = label
         metadata['factor'] = factor
-        return SignalData(data, signal_data.sample_rate, metadata)
+        return SignalData(data, metadata)
     return process
 
 
@@ -109,18 +109,18 @@ def expensive_load_data(delay=2.0):
     def load(_):
         time.sleep(delay)  # Simulate expensive operation
         data = np.random.randn(1000)
-        return SignalData(data, sample_rate=1e6)
+        return SignalData(data, metadata={'sample_rate': 1e6})
     return load
 
 def expensive_preprocessing(delay=1.5):
     def preprocess(signal_data):
         time.sleep(delay)  # Simulate expensive operation
-        return SignalData(signal_data.data * 2, signal_data.sample_rate)
+        return SignalData(signal_data.data * 2, signal_data.metadata)
     return preprocess
 
 def cheap_operation(factor):
     def process(signal_data):
-        return SignalData(signal_data.data * factor, signal_data.sample_rate)
+        return SignalData(signal_data.data * factor, signal_data.metadata)
     return process
 
 # With memoization (default)
@@ -154,9 +154,9 @@ print(f"Speedup: {uncached_time/cached_time:.1f}x")  # ~3x
     page.add_header("Live Performance Comparison", level=2)
     page.add_text("Running the same parameter exploration with and without memoization:")
     
-    # Define delays for demonstration
-    load_delay = 2.0  # seconds
-    preprocess_delay = 1.5  # seconds
+    # Define delays for demonstration (reduced for faster dashboard generation)
+    load_delay = 0.2  # seconds
+    preprocess_delay = 0.15  # seconds
     num_variants = 3
     
     # Test with cache enabled

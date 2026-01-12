@@ -94,8 +94,11 @@ def publish_all_demos(output_dir='docs'):
             dashboard = module.create_dashboard()
             directory.add_dashboard(dashboard, slug=slug)
             slugs.append((slug, dashboard.title))
+            print(f"  ✓ Success")
         except Exception as e:
-            print(f"  Error creating dashboard: {e}")
+            print(f"  ✗ Error: {e}")
+            import traceback
+            traceback.print_exc()
             continue
     
     # Publish everything to output directory
