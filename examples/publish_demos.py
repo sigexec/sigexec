@@ -82,7 +82,7 @@ def publish_all_demos(output_dir='docs'):
     
     # Create directory to hold multiple dashboards
     directory = sd.Directory(
-        title='sigchain demos',
+        title='sigexec demos',
         page_width=1000
     )
     
