@@ -1,8 +1,8 @@
 """
 Input Variants Demo
 
-Processing multiple signals through the same pipeline with input_variants().
-Shows how to run the same processing pipeline over different input signals,
+Processing multiple signals through the same graph with input_variants().
+Shows how to run the same processing graph over different input signals,
 and how to combine input variants with processing variants.
 """
 
@@ -10,9 +10,9 @@ import numpy as np
 import pandas as pd
 import tempfile
 import os
-from sigchain import Pipeline, SignalData
-from sigchain.blocks import LFMGenerator, StackPulses, RangeCompress, DopplerCompress
-from sigchain.diagnostics import plot_range_doppler_map
+from sigexec import Graph, SignalData
+from sigexec.blocks import LFMGenerator, StackPulses, RangeCompress, DopplerCompress
+from sigexec.diagnostics import plot_range_doppler_map
 
 try:
     import staticdash as sd
@@ -34,24 +34,24 @@ def create_dashboard() -> sd.Dashboard:
     page.add_header("Processing Multiple Signals with input_variants()", level=1)
     page.add_text("""
     When you have multiple signals (from different files, sensors, or test scenarios) that need
-    the same processing, use `.input_variants()` to run them all through the same pipeline.
+    the same processing, use `.input_variants()` to run them all through the same graph.
     """)
     
     # Demo 1: Basic input variants
     page.add_header("Method 1: Process Multiple Input Signals", level=2)
     
     code_example_1 = """
-from sigchain import Pipeline
-from sigchain.blocks import RangeCompress, DopplerCompress
-from sigchain.core.data import SignalData
+from sigexec import Graph
+from sigexec.blocks import RangeCompress, DopplerCompress
+from sigexec.core.data import SignalData
 
 # Load or generate different signals
 signal_dataset_a = load_signal("dataset_a.bin")
 signal_dataset_b = load_signal("dataset_b.bin")  
 signal_dataset_c = load_signal("dataset_c.bin")
 
-# Process all three through the same pipeline
-results = (Pipeline()
+# Process all three through the same graph
+results = (Graph()
     .input_variants([signal_dataset_a, signal_dataset_b, signal_dataset_c],
                    names=['Dataset A', 'Dataset B', 'Dataset C'])
     .add(RangeCompress(window='hamming'))
@@ -70,7 +70,7 @@ for params, result in results:
     page.add_header("Live Example: Three Different Target Scenarios", level=3)
     page.add_text("""
     Processing three radar scenarios with different target parameters through 
-    the same range/Doppler compression pipeline.
+    the same range/Doppler compression graph.
     """)
     
     # Create three signals with different target parameters
@@ -85,7 +85,7 @@ for params, result in results:
     )(None)
     
     # Process all three
-    results = (Pipeline()
+    results = (Graph()
         .input_variants([signal1, signal2, signal3],
                        names=['Near/Slow', 'Mid/Fast', 'Far/Receding'])
         .add(StackPulses())
@@ -105,12 +105,12 @@ for params, result in results:
     page.add_header("Method 2: Lazy Loading with Variants", level=2)
     page.add_text("""
     For large datasets or many files, you don't want to load everything into memory at once.
-    Use `.variants()` with a loader factory to load data lazily during pipeline execution.
+    Use `.variants()` with a loader factory to load data lazily during graph execution.
     """)
     
     code_example_2 = """
-from sigchain import Pipeline
-from sigchain.core.data import SignalData
+from sigexec import Graph
+from sigexec.core.data import SignalData
 import numpy as np
 
 # Create a loader factory - data is loaded only when the variant executes
@@ -120,9 +120,9 @@ def make_loader(filename):
         return SignalData(data, metadata={'sample_rate': 20e6})
     return load
 
-# Process multiple files through the same pipeline
+# Process multiple files through the same graph
 # Each file is loaded only when needed, one at a time
-results = (Pipeline()
+results = (Graph()
     .variants(make_loader, 
               ['dataset_a.npy', 'dataset_b.npy', 'dataset_c.npy'],
               names=['Dataset A', 'Dataset B', 'Dataset C'])
@@ -181,8 +181,8 @@ for params, result in results:
     file_paths = [os.path.join(temp_dir, f'{name}.npz') for name, _, _ in scenarios]
     scenario_names = ['Near/Slow', 'Mid/Fast', 'Far/Receding']
     
-    # Process all files through pipeline - loaded one at a time
-    results = (Pipeline()
+    # Process all files through graph - loaded one at a time
+    results = (Graph()
         .variants(lambda fp: make_loader(fp, None), file_paths, names=scenario_names)
         .add(StackPulses())
         .add(RangeCompress(window='hamming', oversample_factor=2))
@@ -210,7 +210,7 @@ for params, result in results:
     """)
     
     code_example_3 = """
-from sigchain import Pipeline
+from sigexec import Graph
 
 # Loader factory
 def make_loader(filename):
@@ -221,7 +221,7 @@ def make_loader(filename):
 
 # 3 files × 2 range windows × 2 Doppler windows = 12 total combinations
 # But only one file is in memory at a time!
-results = (Pipeline()
+results = (Graph()
     .variants(make_loader, 
               ['sig_a.npy', 'sig_b.npy', 'sig_c.npy'],
               names=['Signal A', 'Signal B', 'Signal C'])
@@ -279,7 +279,7 @@ for params, result in results:
         return load
     
     # Combine lazy loading with processing variants
-    combined_results = (Pipeline()
+    combined_results = (Graph()
         .variants(make_file_loader, [file_a, file_b], names=['Target 1', 'Target 2'])
         .add(StackPulses())
         .variants(lambda w: RangeCompress(window=w, oversample_factor=2), 
@@ -325,7 +325,7 @@ for params, result in results:
     1. **Memory Efficient**: Only one signal in memory at a time
     2. **Scalable**: Process hundreds of files without memory issues
     3. **Flexible**: Combine with processing variants for full exploration
-    4. **Consistent Processing**: Same pipeline applied to all data
+    4. **Consistent Processing**: Same graph applied to all data
     5. **Easy Pattern**: Just wrap your loader in a factory function
     
     Pattern to remember:
@@ -337,7 +337,7 @@ for params, result in results:
             return SignalData(data, sample_rate=...)
         return load
     
-    results = Pipeline().variants(make_loader, file_list, names=...).add(...).run()
+    results = Graph().variants(make_loader, file_list, names=...).add(...).run()
     ```
     
     Use cases:

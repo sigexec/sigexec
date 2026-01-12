@@ -19,7 +19,7 @@
       <div class="content-inner">
         <div>
           <div style="max-width: 900px; margin: 0 auto; width: 100%; padding-top: 80px; padding-bottom: 80px; --content-width: 900px;">
-            <h1>Pipeline Memoization Performance</h1>
+            <h1>Graph Memoization Performance</h1>
             <div>
               <p>When exploring parameter variants, pipelines automatically cache (memoize) intermediate results.
     This means shared computation stages only execute once, dramatically improving performance.
@@ -51,7 +51,7 @@
             </div>
             <h2>Code Example</h2>
             <div class="syntax-block"><pre class="syntax-block"><code class="language-python">
-from sigchain import Pipeline, SignalData
+from sigexec import Graph, SignalData
 import time
 import numpy as np
 
@@ -76,7 +76,7 @@ def cheap_operation(factor):
 
 # With memoization (default)
 start = time.time()
-results_cached = (Pipeline(&quot;Cached&quot;, enable_cache=True)
+results_cached = (Graph(&quot;Cached&quot;, enable_cache=True)
     .add(expensive_load_data(delay=2.0))      # Runs once (2s)
     .add(expensive_preprocessing(delay=1.5))  # Runs once (1.5s)
     .variants(cheap_operation, [1.0, 2.0, 3.0], 
@@ -88,7 +88,7 @@ print(f&quot;With cache: {cached_time:.1f}s&quot;)  # ~3.5s
 
 # Without memoization
 start = time.time()
-results_uncached = (Pipeline(&quot;Uncached&quot;, enable_cache=False)
+results_uncached = (Graph(&quot;Uncached&quot;, enable_cache=False)
     .add(expensive_load_data(delay=2.0))      # Runs 3 times (6s)
     .add(expensive_preprocessing(delay=1.5))  # Runs 3 times (4.5s)
     .variants(cheap_operation, [1.0, 2.0, 3.0],
@@ -285,8 +285,8 @@ print(f&quot;Speedup: {uncached_time/cached_time:.1f}x&quot;)  # ~3x
     3. **Group similar explorations**: If exploring multiple parameter dimensions,
        do them in one pipeline rather than separate runs.
     
-    4. **Clear cache when needed**: The cache is shared across all Pipeline instances.
-       Clear it with `Pipeline._global_cache.clear()` when starting a new experiment.
+    4. **Clear cache when needed**: The cache is shared across all Graph instances.
+       Clear it with `Graph._global_cache.clear()` when starting a new experiment.
     
     5. **Disable cache for debugging**: Use `enable_cache=False` when debugging or when
        you explicitly want fresh execution (e.g., testing randomness).</p>

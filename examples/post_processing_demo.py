@@ -6,9 +6,9 @@ and how to selectively plot variant results.
 """
 
 import numpy as np
-from sigchain import Pipeline
-from sigchain.blocks import LFMGenerator, StackPulses, RangeCompress, DopplerCompress
-from sigchain.diagnostics import plot_pulse_matrix, plot_range_profile, plot_range_doppler_map
+from sigexec import Graph
+from sigexec.blocks import LFMGenerator, StackPulses, RangeCompress, DopplerCompress
+from sigexec.diagnostics import plot_pulse_matrix, plot_range_profile, plot_range_doppler_map
 
 try:
     import staticdash as sd
@@ -30,30 +30,30 @@ def create_dashboard() -> sd.Dashboard:
     dashboard = sd.Dashboard('Post-Processing Plots')
     page = sd.Page('post-plots', 'Plotting After Execution')
     
-    page.add_header("Plotting After Pipeline Execution", level=1)
+    page.add_header("Plotting After Graph Execution", level=1)
     page.add_text("""
     All plotting functions are pure functions that work on SignalData objects.
-    This means you can plot whenever you want - during pipeline execution with .tap(),
+    This means you can plot whenever you want - during graph execution with .tap(),
     or after the fact with saved results.
     """)
     
     # Demo 1: Intermediate results
     page.add_header("Method 1: Save and Plot Intermediate Results", level=2)
     page.add_text("""
-    Use `save_intermediate=True` to capture the output of every pipeline stage.
+    Use `save_intermediate=True` to capture the output of every graph stage.
     Then use `get_intermediate_results()` to retrieve them and plot any stage you want.
     """)
     
     code_example_1 = """
-from sigchain import Pipeline
-from sigchain.blocks import LFMGenerator, StackPulses, RangeCompress, DopplerCompress
-from sigchain.diagnostics.visualization import (
+from sigexec import Graph
+from sigexec.blocks import LFMGenerator, StackPulses, RangeCompress, DopplerCompress
+from sigexec.diagnostics.visualization import (
     plot_timeseries, plot_pulse_matrix, 
     plot_range_profile, plot_range_doppler_map
 )
 
-# Build and run pipeline, saving all intermediate results
-pipeline = (Pipeline("Radar")
+# Build and run graph, saving all intermediate results
+graph = (Graph("Radar")
     .add(LFMGenerator(num_pulses=64, target_delay=2e-6, target_doppler=200.0))
     .add(StackPulses())
     .add(RangeCompress(window='hamming'))
@@ -61,8 +61,8 @@ pipeline = (Pipeline("Radar")
 )
 
 # Run with intermediate results saved
-result = pipeline.run(save_intermediate=True)
-intermediates = pipeline.get_intermediate_results()
+result = graph.run(save_intermediate=True)
+intermediates = graph.get_intermediate_results()
 
 # Now plot any stage you want!
 fig1 = plot_timeseries(intermediates[0], title="Stage 1: Generated Signal")
@@ -80,7 +80,7 @@ if need_to_check_range_compression:
     # Actually run this demo
     page.add_header("Live Example: Intermediate Results", level=3)
     
-    pipeline = (Pipeline("IntermediateDemo")
+    graph = (Graph("IntermediateDemo")
         .add(LFMGenerator(
             num_pulses=32,
             target_delay=2e-6,
@@ -92,8 +92,8 @@ if need_to_check_range_compression:
         .add(DopplerCompress(window='hann', oversample_factor=2))
     )
     
-    result = pipeline.run(save_intermediate=True)
-    intermediates = pipeline.get_intermediate_results()
+    result = graph.run(save_intermediate=True)
+    intermediates = graph.get_intermediate_results()
     
     # Plot selected stages
     fig1 = plot_pulse_matrix(intermediates[1], title="After Stacking", height=400)
@@ -114,12 +114,12 @@ if need_to_check_range_compression:
     """)
     
     code_example_2 = """
-from sigchain import Pipeline
-from sigchain.blocks import LFMGenerator, StackPulses, RangeCompress, DopplerCompress
-from sigchain.diagnostics.visualization import plot_range_doppler_map
+from sigexec import Graph
+from sigexec.blocks import LFMGenerator, StackPulses, RangeCompress, DopplerCompress
+from sigexec.diagnostics.visualization import plot_range_doppler_map
 
 # Run all variant combinations
-results = (Pipeline("Radar")
+results = (Graph("Radar")
     .add(LFMGenerator(num_pulses=64, target_delay=2e-6, target_doppler=200.0))
     .add(StackPulses())
     .variants(lambda w: RangeCompress(window=w), 
@@ -159,7 +159,7 @@ fig = plot_range_doppler_map(best_result, title=title)
     page.add_header("Live Example: Filtered Variant Results", level=3)
     page.add_text("Running 2×2 variant combinations and plotting only selected results:")
     
-    results = (Pipeline("FilteredDemo")
+    results = (Graph("FilteredDemo")
         .add(LFMGenerator(
             num_pulses=32,
             target_delay=2e-6,
@@ -199,7 +199,7 @@ fig = plot_range_doppler_map(best_result, title=title)
     Key takeaways:
     
     1. **Intermediate Results**: Use `save_intermediate=True` and `get_intermediate_results()` 
-       to capture and plot any stage of your pipeline after execution.
+       to capture and plot any stage of your graph after execution.
        
     2. **Variant Filtering**: Run all variants, then selectively plot or analyze only the 
        combinations you're interested in.

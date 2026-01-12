@@ -3,9 +3,9 @@ requires = ["setuptools>=45"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "sigchain"
+name = "sigexec"
 version = "0.1.0"
-description = "Signal processing chain using DAG and data classes"
+description = "Signal processing execution graph using DAG and data classes"
 readme = "README.md"
 requires-python = ">=3.7"
 authors = [

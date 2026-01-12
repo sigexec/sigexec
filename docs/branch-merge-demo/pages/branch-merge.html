@@ -31,7 +31,7 @@
     Each branch can then process the data independently.</p>
             </div>
             <div class="syntax-block"><pre class="syntax-block"><code class="language-python">
-from sigchain import Pipeline, SignalData
+from sigexec import Graph, SignalData
 import numpy as np
 
 # Generate a simple signal
@@ -39,7 +39,7 @@ data = SignalData(data=np.sin(2 * np.pi * np.linspace(0, 1, 100)))
 
 # Create pipeline with duplicate branches
 pipeline = (
-    Pipeline(&quot;duplicate_branches&quot;)
+    Graph(&quot;duplicate_branches&quot;)
     .input_data(data)
     .branch([&quot;high_pass&quot;, &quot;low_pass&quot;])  # Duplicate into two branches
     .add(high_pass_filter, branch=&quot;high_pass&quot;)
@@ -72,7 +72,7 @@ def combine_mag_phase(sigs):
     return SignalData(data=complex_data, metadata=sigs[0].metadata)
 
 pipeline = (
-    Pipeline(&quot;feature_extraction&quot;)
+    Graph(&quot;feature_extraction&quot;)
     .input_data(complex_signal)
     .branch([&quot;magnitude&quot;, &quot;phase&quot;], 
             functions=[extract_magnitude, extract_phase])
@@ -111,7 +111,7 @@ def amplify(factor):
 
 # Create branching pipeline
 pipeline = (
-    Pipeline(&quot;parallel_filtering&quot;)
+    Graph(&quot;parallel_filtering&quot;)
     .input_data(signal_data)
     .branch([&quot;lowpass&quot;, &quot;highpass&quot;])                    # Split into two paths
     .add(low_pass_filter, branch=&quot;lowpass&quot;)             # Filter low frequencies
@@ -177,9 +177,9 @@ def reconstruct_complex(sigs):
     return SignalData(data=amplitude * np.exp(1j * phase), 
                      metadata=sigs[0].metadata)
 
-# Pipeline with function branches
+# Graph with function branches
 pipeline = (
-    Pipeline(&quot;amplitude_phase_processing&quot;)
+    Graph(&quot;amplitude_phase_processing&quot;)
     .input_data(complex_data)
     .branch([&quot;amplitude&quot;, &quot;phase&quot;],              # Split by function
             functions=[extract_amplitude, extract_phase])
@@ -233,7 +233,7 @@ result = pipeline.run()
 # Explore different amplification factors using variants
 # While using branches for parallel filtering
 pipeline = (
-    Pipeline(&quot;variants_and_branches&quot;)
+    Graph(&quot;variants_and_branches&quot;)
     .input_data(signal_data)
     .variants(amplify, [1.0, 2.0, 5.0], names=[&quot;1x&quot;, &quot;2x&quot;, &quot;5x&quot;])
     .branch([&quot;lowpass&quot;, &quot;highpass&quot;])

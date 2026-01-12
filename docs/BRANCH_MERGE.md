@@ -2,9 +2,9 @@
 
 ## Overview
 
-SigChain now supports DAG (Directed Acyclic Graph) pipelines with explicit branch and merge operations. This allows you to:
+SigChain now supports DAG (Directed Acyclic Graph) graphs with explicit branch and merge operations. This allows you to:
 
-1. **Split** a pipeline into multiple parallel branches
+1. **Split** a graph into multiple parallel branches
 2. **Process** each branch independently
 3. **Merge** branches back together with a custom combiner function
 
@@ -20,7 +20,7 @@ Create named branches for parallel execution.
 - `labels`: List of branch names
 - `functions`: Optional list of functions to apply. If None, signal is duplicated to all branches.
 
-**Returns:** `Pipeline` (for chaining)
+**Returns:** `Graph` (for chaining)
 
 ### `.add(operation, branch=None)`
 
@@ -30,7 +30,7 @@ Add operation to specific branch or all active branches.
 - `operation`: Function `SignalData -> SignalData`
 - `branch`: Optional branch name. If None, applies to all active branches.
 
-**Returns:** `Pipeline` (for chaining)
+**Returns:** `Graph` (for chaining)
 
 ### `.merge(branch_names, combiner, output_name='merged')`
 
@@ -41,14 +41,14 @@ Merge multiple branches into one.
 - `combiner`: Function `List[SignalData] -> SignalData`
 - `output_name`: Name for merged branch (default: 'merged')
 
-**Returns:** `Pipeline` (for chaining)
+**Returns:** `Graph` (for chaining)
 
 ## Examples
 
 ### Example 1: Simple Duplicate and Merge
 
 ```python
-from sigchain import Pipeline, SignalData
+from sigexec import Graph, SignalData
 import numpy as np
 
 def multiply_by_2(sig):
@@ -63,7 +63,7 @@ def add_branches(signals):
 
 data = np.array([1.0, 2.0, 3.0, 4.0])
 
-result = (Pipeline()
+result = (Graph()
     .input_data(SignalData(data, metadata={'sample_rate': 1000}))
     .branch(["b1", "b2"])  # Duplicate signal to two branches
     .add(multiply_by_2, branch="b1")
@@ -93,7 +93,7 @@ def reconstruct(signals):
 
 data = np.array([1.0 + 2.0j, 3.0 + 4.0j])
 
-result = (Pipeline()
+result = (Graph()
     .input_data(SignalData(data, metadata={'sample_rate': 1000}))
     .branch(labels=["amp", "phase"], 
             functions=[extract_amplitude, extract_phase])
@@ -124,7 +124,7 @@ def scale_by_param(signals):
 
 data = np.array([1.0, 2.0, 3.0])
 
-result = (Pipeline()
+result = (Graph()
     .input_data(SignalData(data, metadata={'sample_rate': 1000}))
     .branch(labels=["data", "param"], 
             functions=[identity, extract_parameter])
@@ -155,7 +155,7 @@ This keeps the type system simple while allowing flexible data flow.
 The combiner always receives `List[SignalData]` in the order specified:
 
 ```python
-pipeline.merge(["branch_a", "branch_b", "branch_c"], combiner)
+graph.merge(["branch_a", "branch_b", "branch_c"], combiner)
 
 def combiner(signals):
     # signals[0] is from branch_a
@@ -172,7 +172,7 @@ Order is explicit and documented in the code.
 - **`.variants()`**: Explores parameter combinations, duplicates entire downstream graph
 - **`.branch()/.merge()`**: Creates actual DAG structure, branches process independently
 
-They're complementary - you can use both in the same pipeline!
+They're complementary - you can use both in the same graph!
 
 ## Implementation Details
 

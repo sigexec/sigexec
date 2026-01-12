@@ -2,13 +2,13 @@
 Custom Blocks Tutorial Demo
 
 Shows how to create custom processing blocks inline and compose them
-with built-in blocks in a processing pipeline.
+with built-in blocks in a processing graph.
 """
 
 import numpy as np
-from sigchain import Pipeline, SignalData
-from sigchain.blocks import LFMGenerator
-from sigchain.diagnostics import plot_timeseries
+from sigexec import Graph, SignalData
+from sigexec.blocks import LFMGenerator
+from sigexec.diagnostics import plot_timeseries
 
 try:
     import staticdash as sd
@@ -28,18 +28,18 @@ def create_dashboard() -> sd.Dashboard:
     dashboard = sd.Dashboard('Custom Processing Tutorial')
     page = sd.Page('custom-demo', 'Custom Processing Demo')
     
-    page.add_header("Custom Processing Pipeline", level=1)
+    page.add_header("Custom Processing Graph", level=1)
     page.add_text("""
     This example demonstrates how to create custom processing blocks inline
-    and compose them with built-in blocks in a processing pipeline.
+    and compose them with built-in blocks in a processing graph.
     """)
     
     # Add code example
     page.add_header("Code Example", level=2)
     code_example = """
-from sigchain import Pipeline, SignalData
-from sigchain.blocks import LFMGenerator
-from sigchain.diagnostics import plot_timeseries
+from sigexec import Graph, SignalData
+from sigexec.blocks import LFMGenerator
+from sigexec.diagnostics import plot_timeseries
 import numpy as np
 
 # Define custom processing function inline
@@ -57,9 +57,9 @@ def normalize_signal(signal_data: SignalData) -> SignalData:
         data = data / max_val
     return SignalData(data, signal_data.metadata)
 
-# Compose pipeline with custom blocks
+# Compose graph with custom blocks
 page = sd.Page('demo', 'Demo')
-result = (Pipeline("CustomDemo")
+result = (Graph("CustomDemo")
     .add(LFMGenerator(num_pulses=32))
     .tap(lambda s: page.add_plot(plot_timeseries(s, title="Original Signal")))
     
@@ -94,10 +94,10 @@ result = (Pipeline("CustomDemo")
         metadata['original_max'] = max_val
         return SignalData(data, metadata)
     
-    # Build pipeline with custom blocks
-    page.add_header("Pipeline Execution", level=2)
+    # Build graph with custom blocks
+    page.add_header("Graph Execution", level=2)
     
-    result = (Pipeline("CustomDemo")
+    result = (Graph("CustomDemo")
         .add(LFMGenerator(num_pulses=32, target_delay=5e-6, noise_power=0.1), name="Generate")
         .tap(lambda s: page.add_header("Stage 1: Generated Signal", level=2))
         .tap(lambda s: page.add_plot(plot_timeseries(s, title="Original LFM Signal", 
@@ -122,7 +122,7 @@ result = (Pipeline("CustomDemo")
     This example showed how to:
     1. Define custom processing functions inline (not in the blocks directory)
     2. Use lambda functions to pass parameters to custom blocks
-    3. Compose custom blocks with built-in blocks in a pipeline
+    3. Compose custom blocks with built-in blocks in a graph
     4. Add visualizations at each stage with `.tap()`
     """)
     

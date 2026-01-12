@@ -4,7 +4,7 @@ Pytest unit tests for branch/merge DAG functionality.
 
 import numpy as np
 import pytest
-from sigchain import Pipeline, SignalData
+from sigexec import Graph, SignalData
 
 
 class TestBranchDuplicate:
@@ -25,7 +25,7 @@ class TestBranchDuplicate:
             return SignalData(signals[0].data + signals[1].data, 
                              metadata={'sample_rate': signals[0].sample_rate})
         
-        result = (Pipeline()
+        result = (Graph()
             .input_data(SignalData(data, metadata={'sample_rate': 1000}))
             .branch(["b1", "b2"])
             .add(multiply_by_2, branch="b1")
@@ -39,13 +39,13 @@ class TestBranchDuplicate:
         
     def test_branch_returns_pipeline(self):
         """Test that branch returns self for chaining."""
-        p = Pipeline()
+        p = Graph()
         result = p.branch(["b1", "b2"])
         assert result is p
         
     def test_merge_returns_pipeline(self):
         """Test that merge returns self for chaining."""
-        p = Pipeline()
+        p = Graph()
         p.branch(["b1", "b2"])
         result = p.merge(["b1", "b2"], combiner=lambda sigs: sigs[0])
         assert result is p
@@ -71,7 +71,7 @@ class TestBranchWithFunctions:
             reconstructed = amp.data * np.exp(1j * phase.data)
             return SignalData(reconstructed, metadata={'sample_rate': amp.sample_rate})
         
-        result = (Pipeline()
+        result = (Graph()
             .input_data(SignalData(data, metadata={'sample_rate': 1000}))
             .branch(labels=["amp", "phase"], functions=[extract_amplitude, extract_phase])
             .merge(["amp", "phase"], combiner=reconstruct)
@@ -82,7 +82,7 @@ class TestBranchWithFunctions:
         
     def test_branch_with_mismatched_functions(self):
         """Test that branch raises error if functions count doesn't match labels."""
-        p = Pipeline()
+        p = Graph()
         
         with pytest.raises(ValueError, match="must match number of labels"):
             p.branch(labels=["b1", "b2"], functions=[lambda sig: sig])
@@ -95,7 +95,7 @@ class TestBranchTargeting:
         """Test adding operation to specific branch."""
         data = np.array([10.0])
         
-        result = (Pipeline()
+        result = (Graph()
             .input_data(SignalData(data, metadata={'sample_rate': 1000}))
             .branch(["b1", "b2"])
             .add(lambda sig: SignalData(sig.data * 2, metadata=sig.metadata.copy()), branch="b1")
@@ -111,7 +111,7 @@ class TestBranchTargeting:
         
     def test_add_to_nonexistent_branch_raises_error(self):
         """Test that adding to nonexistent branch raises error."""
-        p = Pipeline()
+        p = Graph()
         p.branch(["b1", "b2"])
         
         with pytest.raises(ValueError, match="not active"):
@@ -140,7 +140,7 @@ class TestScalarParameters:
             scaled = data_sig.data * factor
             return SignalData(scaled, metadata={'sample_rate': data_sig.sample_rate})
         
-        result = (Pipeline()
+        result = (Graph()
             .input_data(SignalData(data, metadata={'sample_rate': 1000}))
             .branch(labels=["data", "param"], functions=[identity, make_scalar])
             .add(lambda sig: SignalData(sig.data + 1, metadata={'sample_rate': sig.sample_rate}), 
@@ -167,7 +167,7 @@ class TestMergeCombiner:
         
         data = SignalData(np.array([1.0]))
         
-        (Pipeline()
+        (Graph()
             .input_data(data)
             .branch(["b1", "b2"])
             .merge(["b1", "b2"], combiner=inspector_combiner)
@@ -193,7 +193,7 @@ class TestMergeCombiner:
             assert signals[2].metadata['tag'] == 3
             return signals[0]
         
-        (Pipeline()
+        (Graph()
             .input_data(SignalData(data))
             .branch(["b1", "b2", "b3"])
             .add(tag_branch(1), branch="b1")
@@ -217,7 +217,7 @@ class TestBranchCaching:
                 return SignalData(sig.data * 2, metadata=sig.metadata.copy())
             return op
         
-        p = Pipeline()
+        p = Graph()
         p.input_data(SignalData(np.array([1.0])))
         p.branch(["b1", "b2"])
         p.add(counting_op('b1'), branch="b1")
@@ -238,7 +238,7 @@ class TestBranchErrorHandling:
     
     def test_merge_nonexistent_branch(self):
         """Test merging nonexistent branch raises error."""
-        p = Pipeline()
+        p = Graph()
         p.branch(["b1", "b2"])
         
         with pytest.raises(ValueError, match="not active"):

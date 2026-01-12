@@ -1,6 +1,6 @@
 # Clean DAG-like Signal Processing
 
-This document explains the clean, data-class-based approach to building signal processing pipelines in sigchain.
+This document explains the clean, data-class-based approach to building signal processing graphs in sigexec.
 
 ## Core Concept
 
@@ -13,7 +13,7 @@ Each processing block is a **data class** (using `@dataclass`) that:
 
 ## Benefits
 
-- **Type Safety**: Same type (`SignalData`) flows through entire pipeline
+- **Type Safety**: Same type (`SignalData`) flows through entire graph
 - **Composability**: Blocks can be combined in any order
 - **Clarity**: Configuration separate from execution
 - **Immutability**: Each block returns new data, doesn't modify input
@@ -24,7 +24,7 @@ Each processing block is a **data class** (using `@dataclass`) that:
 ### Signal Generation
 
 ```python
-from sigchain.blocks import LFMGenerator
+from sigexec.blocks import LFMGenerator
 
 gen = LFMGenerator(
     num_pulses=128,
@@ -41,7 +41,7 @@ signal = gen()  # Returns SignalData
 ### Processing Blocks
 
 ```python
-from sigchain.blocks import (
+from sigexec.blocks import (
     StackPulses,      # Organize pulses in 2D matrix
     RangeCompress,    # Matched filtering
     DopplerCompress,  # FFT-based Doppler processing
@@ -80,15 +80,15 @@ signal = doppler_comp(signal)
 
 **Key Point**: The same `SignalData` object type flows through every stage.
 
-### Pattern 2: Using Pipeline (Better Organization)
+### Pattern 2: Using Graph (Better Organization)
 
-Use the `Pipeline` class for better structure and debugging:
+Use the `Graph` class for better structure and debugging:
 
 ```python
-from sigchain import Pipeline
+from sigexec import Graph
 
-# Build pipeline
-pipeline = (Pipeline("MyRadar")
+# Build graph
+graph = (Graph("MyRadar")
     .add(gen)
     .add(stack)
     .add(range_comp)
@@ -96,7 +96,7 @@ pipeline = (Pipeline("MyRadar")
 )
 
 # Execute
-result = pipeline.run(verbose=True)
+result = graph.run(verbose=True)
 ```
 
 ### Pattern 3: Inline Configuration (Most Compact)
@@ -104,7 +104,7 @@ result = pipeline.run(verbose=True)
 Configure blocks inline for quick prototyping:
 
 ```python
-result = (Pipeline("QuickRadar")
+result = (Graph("QuickRadar")
     .add(LFMGenerator(num_pulses=64, target_delay=15e-6))
     .add(StackPulses())
     .add(RangeCompress())
@@ -116,8 +116,8 @@ result = (Pipeline("QuickRadar")
 ## Complete Example
 
 ```python
-from sigchain import Pipeline
-from sigchain.blocks import (
+from sigexec import Graph
+from sigexec.blocks import (
     LFMGenerator,
     StackPulses,
     RangeCompress,
@@ -149,8 +149,8 @@ signal = stack(signal)
 signal = range_comp(signal)
 signal = doppler_comp(signal)
 
-# Method 3: Using Pipeline
-result = (Pipeline("Radar")
+# Method 3: Using Graph
+result = (Graph("Radar")
     .add(gen)
     .add(stack)
     .add(range_comp)
@@ -170,7 +170,7 @@ To create your own block, use the `@dataclass` decorator:
 ```python
 from dataclasses import dataclass
 import numpy as np
-from sigchain import SignalData
+from sigexec import SignalData
 
 @dataclass
 class MyCustomBlock:
@@ -215,7 +215,7 @@ result = my_block(input_signal)
 
 1. **Name your blocks**: Use descriptive names for debugging
 2. **Check metadata**: Use metadata to verify processing stages
-3. **Test incrementally**: Run partial pipelines during development
+3. **Test incrementally**: Run partial graphs during development
 4. **Use tap()**: Add inspection points without modifying data
 5. **Keep blocks focused**: Each block should do one thing well
 6. **Document parameters**: Use docstrings in custom blocks

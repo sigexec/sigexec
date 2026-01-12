@@ -3,8 +3,8 @@ Tests for the functional/data class blocks.
 """
 
 import numpy as np
-from sigchain import SignalData, Pipeline
-from sigchain.blocks import (
+from sigexec import SignalData, Graph
+from sigexec.blocks import (
     LFMGenerator,
     StackPulses,
     RangeCompress,
@@ -164,24 +164,24 @@ def test_direct_chaining():
 
 
 def test_pipeline_with_functional_blocks():
-    """Test Pipeline with functional data class blocks."""
-    print("Testing Pipeline with functional blocks...")
+    """Test Graph with functional data class blocks."""
+    print("Testing Graph with functional blocks...")
     
-    pipeline = (Pipeline("TestPipeline")
+    graph = (Graph("TestGraph")
         .add(LFMGenerator(num_pulses=16, target_delay=5e-6))
         .add(StackPulses())
         .add(RangeCompress())
         .add(DopplerCompress())
     )
     
-    assert len(pipeline) == 4
+    assert len(graph) == 4
     
-    result = pipeline.run()
+    result = graph.run()
     
     assert isinstance(result, SignalData)
     assert result.metadata['range_doppler_map'] == True
     
-    print("  ✓ Pipeline with functional blocks tests passed")
+    print("  ✓ Graph with functional blocks tests passed")
 
 
 def test_inline_composition():

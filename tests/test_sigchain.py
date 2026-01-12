@@ -3,8 +3,8 @@ Simple tests to verify the signal processing chain implementation.
 """
 
 import numpy as np
-from sigchain import SignalData, Pipeline
-from sigchain.blocks import LFMGenerator, StackPulses, RangeCompress, DopplerCompress
+from sigexec import SignalData, Graph
+from sigexec.blocks import LFMGenerator, StackPulses, RangeCompress, DopplerCompress
 
 
 def test_signal_data():
@@ -123,10 +123,10 @@ def test_doppler_compress():
 
 
 def test_pipeline():
-    """Test Pipeline execution."""
-    print("Testing Pipeline...")
+    """Test Graph execution."""
+    print("Testing Graph...")
     
-    result = (Pipeline("Test")
+    result = (Graph("Test")
         .add(LFMGenerator(num_pulses=32, target_delay=2e-6, target_doppler=300.0))
         .add(StackPulses())
         .add(RangeCompress())
@@ -143,12 +143,12 @@ def test_pipeline():
     mean_val = np.mean(magnitude)
     assert max_val > 2 * mean_val, "Expected clear target peak"
     
-    print("  ✓ Pipeline tests passed")
+    print("  ✓ Graph tests passed")
 
 
 def test_complete_pipeline():
-    """Test the complete radar processing pipeline with direct chaining."""
-    print("Testing complete pipeline...")
+    """Test the complete radar processing graph with direct chaining."""
+    print("Testing complete graph...")
     
     # Create blocks
     gen = LFMGenerator(
@@ -162,7 +162,7 @@ def test_complete_pipeline():
     range_comp = RangeCompress()
     doppler_comp = DopplerCompress()
     
-    # Execute pipeline via direct chaining
+    # Execute graph via direct chaining
     sig = gen()
     sig = stack(sig)
     sig = range_comp(sig)
@@ -178,7 +178,7 @@ def test_complete_pipeline():
     mean_val = np.mean(magnitude)
     assert max_val > 2 * mean_val, "Expected clear target peak"
     
-    print("  ✓ Complete pipeline tests passed")
+    print("  ✓ Complete graph tests passed")
 
 def run_all_tests():
     """Run all tests."""

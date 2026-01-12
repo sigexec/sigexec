@@ -4,7 +4,7 @@ Pytest configuration and shared fixtures.
 
 import numpy as np
 import pytest
-from sigchain import SignalData, Pipeline
+from sigexec import SignalData, Graph
 
 
 @pytest.fixture
@@ -30,25 +30,25 @@ def complex_signal():
 
 @pytest.fixture
 def empty_pipeline():
-    """Empty pipeline for testing."""
-    return Pipeline()
+    """Empty graph for testing."""
+    return Graph()
 
 
 @pytest.fixture
 def pipeline_with_cache():
-    """Pipeline with caching enabled."""
-    return Pipeline(enable_cache=True)
+    """Graph with caching enabled."""
+    return Graph(enable_cache=True)
 
 
 @pytest.fixture
 def pipeline_without_cache():
-    """Pipeline with caching disabled."""
-    return Pipeline(enable_cache=False)
+    """Graph with caching disabled."""
+    return Graph(enable_cache=False)
 
 
 @pytest.fixture(autouse=True)
 def clear_pipeline_cache():
-    """Clear pipeline cache before each test."""
-    Pipeline.clear_cache()
+    """Clear graph cache before each test."""
+    Graph.clear_cache()
     yield
-    Pipeline.clear_cache()
+    Graph.clear_cache()

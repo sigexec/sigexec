@@ -6,9 +6,9 @@ Shows chained variants to explore cartesian product of processing parameters.
 
 import numpy as np
 import pandas as pd
-from sigchain import Pipeline
-from sigchain.blocks import LFMGenerator, StackPulses, RangeCompress, DopplerCompress
-from sigchain.diagnostics import plot_range_doppler_map
+from sigexec import Graph
+from sigexec.blocks import LFMGenerator, StackPulses, RangeCompress, DopplerCompress
+from sigexec.diagnostics import plot_range_doppler_map
 
 try:
     import staticdash as sd
@@ -39,11 +39,11 @@ def create_dashboard() -> sd.Dashboard:
     # Add code example
     page.add_header("Code Example", level=2)
     code_example = """
-from sigchain import Pipeline
-from sigchain.blocks import LFMGenerator, StackPulses, RangeCompress, DopplerCompress
+from sigexec import Graph
+from sigexec.blocks import LFMGenerator, StackPulses, RangeCompress, DopplerCompress
 
-# Build pipeline and chain variants
-results = (Pipeline("Radar")
+# Build graph and chain variants
+results = (Graph("Radar")
     .add(LFMGenerator(num_pulses=64, target_delay=2e-6, target_doppler=200.0))
     .add(StackPulses())
     .variants(lambda w: RangeCompress(window=w, oversample_factor=2), 
@@ -64,7 +64,7 @@ for params, result in results:
 """
     page.add_syntax(code_example, language='python')
     
-    # Build pipeline with chained variants
+    # Build graph with chained variants
     page.add_header("Parameter Sweep Results", level=2)
     page.add_text("""
     Testing all combinations of window functions:
@@ -74,7 +74,7 @@ for params, result in results:
     Total combinations: 3 × 2 = 6
     """)
     
-    results = (Pipeline("RadarBase")
+    results = (Graph("RadarBase")
         .add(LFMGenerator(
             num_pulses=64,
             target_delay=2e-6,
@@ -124,7 +124,7 @@ for params, result in results:
     3. Find optimal parameter settings
     4. Understand parameter interactions
     
-    The pipeline uses memoization, so common stages (like signal generation and stacking)
+    The graph uses memoization, so common stages (like signal generation and stacking)
     only execute once and are reused across all variants.
     """)
     

@@ -4,7 +4,7 @@ Tests for variant callback and memory-efficient processing features.
 
 import numpy as np
 import pytest
-from sigchain import Pipeline, SignalData
+from sigexec import Graph, SignalData
 
 
 class TestVariantCallbacks:
@@ -25,13 +25,13 @@ class TestVariantCallbacks:
             invocations.append((params.copy(), result.data.copy()))
         
         # Run with 3 variants
-        pipeline = (
-            Pipeline("callback_test")
+        graph = (
+            Graph("callback_test")
             .input_data(data)
             .variants(multiply, [2.0, 3.0, 5.0], names=['2x', '3x', '5x'])
         )
         
-        results = pipeline.run(on_variant_complete=track_variant)
+        results = graph.run(on_variant_complete=track_variant)
         
         # Should be called 3 times
         assert len(invocations) == 3
@@ -65,14 +65,14 @@ class TestVariantCallbacks:
             invocations.append(params['variant'])
         
         # 2 × 2 = 4 combinations
-        pipeline = (
-            Pipeline()
+        graph = (
+            Graph()
             .input_data(data)
             .variants(multiply, [2.0, 3.0], names=['2x', '3x'])
             .variants(add, [1.0, 5.0], names=['+1', '+5'])
         )
         
-        pipeline.run(on_variant_complete=track)
+        graph.run(on_variant_complete=track)
         
         assert len(invocations) == 4
         assert invocations[0] == ['2x', '+1']
@@ -89,18 +89,18 @@ class TestVariantCallbacks:
                 return sig
             return _id
         
-        pipeline = (
-            Pipeline()
+        graph = (
+            Graph()
             .input_data(data)
             .variants(identity, [1, 2, 3])
         )
         
         # With return_results=False, list should be empty
-        results = pipeline.run(return_results=False)
+        results = graph.run(return_results=False)
         assert len(results) == 0
         
         # With return_results=True (default), list should have all results
-        results = pipeline.run(return_results=True)
+        results = graph.run(return_results=True)
         assert len(results) == 3
     
     def test_callback_and_return_results_both_work(self):
@@ -114,13 +114,13 @@ class TestVariantCallbacks:
         def count_variants(params, result):
             callback_count[0] += 1
         
-        pipeline = (
-            Pipeline()
+        graph = (
+            Graph()
             .input_data(data)
             .variants(lambda _: double, [1, 2], names=['a', 'b'])
         )
         
-        results = pipeline.run(
+        results = graph.run(
             on_variant_complete=count_variants,
             return_results=True
         )
@@ -137,13 +137,13 @@ class TestVariantCallbacks:
         def should_not_call(params, result):
             called[0] = True
         
-        pipeline = (
-            Pipeline()
+        graph = (
+            Graph()
             .input_data(data)
             .add(lambda sig: SignalData(data=sig.data * 2, metadata=sig.metadata))
         )
         
-        result = pipeline.run(on_variant_complete=should_not_call)
+        result = graph.run(on_variant_complete=should_not_call)
         
         # Callback should NOT be called (no variants)
         assert called[0] is False
@@ -167,9 +167,9 @@ class TestVariantCallbacksWithBranches:
         def track(params, result):
             invocations.append((params['variant'], float(result.data[0])))
         
-        # Pipeline with variants and branches
-        pipeline = (
-            Pipeline()
+        # Graph with variants and branches
+        graph = (
+            Graph()
             .input_data(data)
             .variants(multiply, [2.0, 3.0], names=['2x', '3x'])
             .branch(['a', 'b'])
@@ -184,7 +184,7 @@ class TestVariantCallbacksWithBranches:
                    ))
         )
         
-        results = pipeline.run(on_variant_complete=track)
+        results = graph.run(on_variant_complete=track)
         
         # Should be called for each variant (2 variants)
         assert len(invocations) == 2

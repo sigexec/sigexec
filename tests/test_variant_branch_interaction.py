@@ -7,8 +7,8 @@ without creating duplicate branch names or conflicts.
 
 import pytest
 import numpy as np
-from sigchain.core.pipeline import Pipeline
-from sigchain.core.data import SignalData
+from sigexec.core.graph import Graph
+from sigexec.core.data import SignalData
 
 
 class TestVariantBranchInteraction:
@@ -30,8 +30,8 @@ class TestVariantBranchInteraction:
         def add_two(signal):
             return SignalData(data=signal.data + 2)
         
-        pipeline = (
-            Pipeline("sweep_then_branch")
+        graph = (
+            Graph("sweep_then_branch")
             .input_data(data)
             .variant(multiply_factory, [2, 3], names=["x2", "x3"])
             .branch(["b1", "b2"])  # Branch after variant
@@ -40,7 +40,7 @@ class TestVariantBranchInteraction:
             .merge(["b1", "b2"], combiner=lambda sigs: SignalData(data=sigs[0].data + sigs[1].data))
         )
         
-        results = pipeline.run()
+        results = graph.run()
         
         # Should have 2 results (one per variant value)
         assert len(results) == 2
@@ -76,15 +76,15 @@ class TestVariantBranchInteraction:
         def extract_last(signal):
             return SignalData(data=signal.data[-1:])
         
-        pipeline = (
-            Pipeline("sweep_branch_funcs")
+        graph = (
+            Graph("sweep_branch_funcs")
             .input_data(data)
             .variant(scale_factory, [1, 2], names=["s1", "s2"])
             .branch(["first", "last"], functions=[extract_first, extract_last])
             .merge(["first", "last"], combiner=lambda sigs: SignalData(data=np.concatenate([sigs[0].data, sigs[1].data])))
         )
         
-        results = pipeline.run()
+        results = graph.run()
         assert len(results) == 2
         
         # s1: [10, 20, 30] -> first=[10], last=[30] -> merge=[10, 30]
@@ -117,8 +117,8 @@ class TestVariantBranchInteraction:
         def path_b(signal):
             return SignalData(data=signal.data * 100)
         
-        pipeline = (
-            Pipeline("multi_sweep_branch")
+        graph = (
+            Graph("multi_sweep_branch")
             .input_data(data)
             .variant(multiply_factory, [2, 3], names=["m2", "m3"])
             .variant(add_factory, [10, 20], names=["a10", "a20"])
@@ -126,7 +126,7 @@ class TestVariantBranchInteraction:
             .merge(["pa", "pb"], combiner=lambda sigs: SignalData(data=sigs[0].data + sigs[1].data))
         )
         
-        results = pipeline.run()
+        results = graph.run()
         
         # Should have 2x2=4 combinations
         assert len(results) == 4
@@ -160,8 +160,8 @@ class TestVariantBranchInteraction:
         
         # This should NOT raise an error about duplicate branches
         # Each variant combination has its own branch scope
-        pipeline = (
-            Pipeline("branch_scoping")
+        graph = (
+            Graph("branch_scoping")
             .input_data(data)
             .variant(scale_factory, [1, 2, 3], names=["s1", "s2", "s3"])
             .branch(["same_name", "another"])  # Same name "same_name" per variant
@@ -170,7 +170,7 @@ class TestVariantBranchInteraction:
             .merge(["same_name", "another"], combiner=lambda sigs: sigs[0])
         )
         
-        results = pipeline.run()
+        results = graph.run()
         assert len(results) == 3
         
         # All should succeed without conflicts

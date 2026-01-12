@@ -4,7 +4,7 @@ Pytest unit tests for core SignalData functionality.
 
 import numpy as np
 import pytest
-from sigchain.core.data import SignalData
+from sigexec.core.data import SignalData
 
 
 class TestSignalDataCreation:

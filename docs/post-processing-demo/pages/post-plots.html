@@ -19,7 +19,7 @@
       <div class="content-inner">
         <div>
           <div style="max-width: 900px; margin: 0 auto; width: 100%; padding-top: 80px; padding-bottom: 80px; --content-width: 900px;">
-            <h1>Plotting After Pipeline Execution</h1>
+            <h1>Plotting After Graph Execution</h1>
             <div>
               <p>All plotting functions are pure functions that work on SignalData objects.
     This means you can plot whenever you want - during pipeline execution with .tap(),
@@ -31,15 +31,15 @@
     Then use `get_intermediate_results()` to retrieve them and plot any stage you want.</p>
             </div>
             <div class="syntax-block"><pre class="syntax-block"><code class="language-python">
-from sigchain import Pipeline
-from sigchain.blocks import LFMGenerator, StackPulses, RangeCompress, DopplerCompress
-from sigchain.diagnostics.visualization import (
+from sigexec import Graph
+from sigexec.blocks import LFMGenerator, StackPulses, RangeCompress, DopplerCompress
+from sigexec.diagnostics.visualization import (
     plot_timeseries, plot_pulse_matrix, 
     plot_range_profile, plot_range_doppler_map
 )
 
 # Build and run pipeline, saving all intermediate results
-pipeline = (Pipeline(&quot;Radar&quot;)
+pipeline = (Graph(&quot;Radar&quot;)
     .add(LFMGenerator(num_pulses=64, target_delay=2e-6, target_doppler=200.0))
     .add(StackPulses())
     .add(RangeCompress(window=&#x27;hamming&#x27;))
@@ -71,12 +71,12 @@ if need_to_check_range_compression:
     only the combinations you're interested in after running all of them.</p>
             </div>
             <div class="syntax-block"><pre class="syntax-block"><code class="language-python">
-from sigchain import Pipeline
-from sigchain.blocks import LFMGenerator, StackPulses, RangeCompress, DopplerCompress
-from sigchain.diagnostics.visualization import plot_range_doppler_map
+from sigexec import Graph
+from sigexec.blocks import LFMGenerator, StackPulses, RangeCompress, DopplerCompress
+from sigexec.diagnostics.visualization import plot_range_doppler_map
 
 # Run all variant combinations
-results = (Pipeline(&quot;Radar&quot;)
+results = (Graph(&quot;Radar&quot;)
     .add(LFMGenerator(num_pulses=64, target_delay=2e-6, target_doppler=200.0))
     .add(StackPulses())
     .variants(lambda w: RangeCompress(window=w), 

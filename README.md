@@ -1,24 +1,24 @@
-# SigChain - Signal Processing Chain Framework
+# SigExec - Signal Processing Chain Framework
 
-A Python framework for building signal processing pipelines with functional dataclass blocks and fluent APIs.
+A Python framework for building signal processing graphs with functional dataclass blocks and fluent APIs.
 
-**SigChain provides the framework - you bring the blocks!** The included radar processing blocks are examples showing how to use the framework. You can easily create your own custom blocks for any signal processing application.
+**SigExec provides the framework - you bring the blocks!** The included radar processing blocks are examples showing how to use the framework. You can easily create your own custom blocks for any signal processing application.
 
 ## Quick Links
 
 - **Custom Blocks Guide** - [docs/CUSTOM_BLOCKS.md](docs/CUSTOM_BLOCKS.md)  
 - **Plugin Reference** - [docs/PLUGIN_REFERENCE.md](docs/PLUGIN_REFERENCE.md)  
 - **Architecture Overview** - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)  
-- **Interactive Demos** - [https://briday1.github.io/sigchain/](https://briday1.github.io/sigchain/)
+- **Interactive Demos** - [https://briday1.github.io/sigexec/](https://briday1.github.io/sigexec/)
 
 ## Features
 
-- **Clean Pipeline Architecture**: Build pipelines where a single object (SignalData) flows through processing stages
+- **Clean Graph Architecture**: Build graphs where a single object (SignalData) flows through processing stages
 - **Data Class Blocks**: Type-safe, composable processing blocks using Python dataclasses
 - **Extensible**: Create custom blocks as simple dataclasses - no complex interfaces required
 - **Functional Composition**: Chain operations naturally with consistent input/output types
-- **Flexible API**: Multiple usage patterns from explicit chaining to pipeline builders
-- **Example Application**: Complete radar processing pipeline demonstrating:
+- **Flexible API**: Multiple usage patterns from explicit chaining to graph builders
+- **Example Application**: Complete radar processing graph demonstrating:
   - LFM signal generation with delay and Doppler shift
   - Pulse stacking
   - Matched filtering (range compression)
@@ -30,8 +30,8 @@ A Python framework for building signal processing pipelines with functional data
 ### From Source
 
 ```bash
-git clone https://github.com/briday1/sigchain.git
-cd sigchain
+git clone https://github.com/briday1/sigexec.git
+cd sigexec
 pip install -e .
 ```
 
@@ -49,7 +49,7 @@ pip install -e .
 The cleanest approach where each block is a configured data class:
 
 ```python
-from sigchain.blocks import LFMGenerator, StackPulses, RangeCompress, DopplerCompress
+from sigexec.blocks import LFMGenerator, StackPulses, RangeCompress, DopplerCompress
 
 # Configure blocks
 gen = LFMGenerator(num_pulses=128, target_delay=20e-6, target_doppler=1000.0)
@@ -57,7 +57,7 @@ stack = StackPulses()
 range_comp = RangeCompress()
 doppler_comp = DopplerCompress(window='hann')
 
-# Single SignalData object flows through pipeline
+# Single SignalData object flows through graph
 signal = gen()                    # Generate signal
 signal = stack(signal)            # Stack pulses
 signal = range_comp(signal)       # Range compression
@@ -67,14 +67,14 @@ signal = doppler_comp(signal)     # Doppler compression
 range_doppler_map = signal.data
 ```
 
-### Using Pipeline for Better Organization
+### Using Graph for Better Organization
 
 ```python
-from sigchain import Pipeline
-from sigchain.blocks import LFMGenerator, StackPulses, RangeCompress, DopplerCompress
+from sigexec import Graph
+from sigexec.blocks import LFMGenerator, StackPulses, RangeCompress, DopplerCompress
 
-# Build pipeline with fluent interface
-result = (Pipeline("Radar")
+# Build graph with fluent interface
+result = (Graph("Radar")
     .add(LFMGenerator(num_pulses=128, target_delay=20e-6, target_doppler=1000.0))
     .add(StackPulses())
     .add(RangeCompress())
@@ -121,7 +121,7 @@ class SignalData:
 Modern, clean blocks implemented as dataclasses:
 
 ```python
-from sigchain.blocks import LFMGenerator, StackPulses, RangeCompress, DopplerCompress
+from sigexec.blocks import LFMGenerator, StackPulses, RangeCompress, DopplerCompress
 
 # Configure blocks with parameters
 gen = LFMGenerator(num_pulses=128, target_delay=20e-6)
@@ -142,10 +142,10 @@ Available data class blocks:
 - `ToMagnitudeDB` - Convert to dB scale
 - `Normalize` - Normalize signal data
 
-#### Pipeline
+#### Graph
 Manages execution with fluent interface:
 ```python
-pipeline = (Pipeline("MyPipeline")
+graph = (Graph("MyPipeline")
     .add(block1)
     .add(block2)
     .add(block3)
@@ -198,13 +198,13 @@ The radar examples produce Range-Doppler maps showing:
 ## Project Structure
 
 ```
-sigchain/
-├── sigchain/
+sigexec/
+├── sigexec/
 │   ├── __init__.py
 │   ├── core/
 │   │   ├── __init__.py
 │   │   ├── data.py          # SignalData class
-│   │   └── pipeline.py      # Pipeline with fluent interface
+│   │   └── graph.py      # Graph with fluent interface
 │   └── blocks/
 │       ├── __init__.py
 │       └── functional.py    # Functional processing blocks
@@ -217,7 +217,7 @@ sigchain/
 │   ├── memoization_demo.py
 │   └── publish_demos.py
 ├── tests/
-│   └── test_sigchain.py
+│   └── test_sigexec.py
 ├── docs/
 │   └── [Generated demo pages]
 ├── pyproject.toml
@@ -242,10 +242,10 @@ signal = compress_range(signal)
 signal = compress_doppler(signal)
 ```
 
-### Pattern 2: Pipeline Builder
+### Pattern 2: Graph Builder
 
 ```python
-result = (Pipeline("Radar")
+result = (Graph("Radar")
     .add(LFMGenerator(num_pulses=128))
     .add(StackPulses())
     .add(RangeCompress())
@@ -265,11 +265,11 @@ result = process(LFMGenerator()())
 
 ## Creating Custom Blocks
 
-**SigChain is designed to be extended!** The included radar blocks are examples - create your own blocks for any domain:
+**SigExec is designed to be extended!** The included radar blocks are examples - create your own blocks for any domain:
 
 ```python
 from dataclasses import dataclass
-from sigchain import SignalData
+from sigexec import SignalData
 
 @dataclass
 class MyCustomBlock:
@@ -302,10 +302,10 @@ You can create and distribute your own block packages:
 
 ```python
 # Your package: my_signal_blocks
-from sigchain import Pipeline
+from sigexec import Graph
 from my_signal_blocks import CustomFilter, CustomTransform
 
-result = (Pipeline("MyPipeline")
+result = (Graph("MyPipeline")
     .add(CustomFilter(cutoff=1000))
     .add(CustomTransform(mode='advanced'))
     .run()
@@ -323,8 +323,8 @@ result = (Pipeline("MyPipeline")
 
 ## Design Philosophy
 
-1. **Framework First**: SigChain provides the framework; you provide the blocks
-2. **Type Safety**: Same type (`SignalData`) throughout the pipeline
+1. **Framework First**: SigExec provides the framework; you provide the blocks
+2. **Type Safety**: Same type (`SignalData`) throughout the graph
 3. **Composability**: Blocks can be combined in any order
 4. **Extensibility**: Easy to create and distribute custom blocks
 5. **Clarity**: Configuration separate from execution
@@ -333,12 +333,12 @@ result = (Pipeline("MyPipeline")
 
 ## Extensibility
 
-The radar processing blocks included in `sigchain.blocks` are **examples** demonstrating the framework. The framework is designed to support:
+The radar processing blocks included in `sigexec.blocks` are **examples** demonstrating the framework. The framework is designed to support:
 
 - **Any signal processing domain**: Audio, video, communications, radar, medical imaging, etc.
 - **Custom block packages**: Distribute your blocks as separate Python packages
 - **Third-party blocks**: Use blocks from other packages with full framework integration
-- **Domain-specific pipelines**: Build specialized processing chains for your application
+- **Domain-specific graphs**: Build specialized processing chains for your application
 
 See [CUSTOM_BLOCKS.md](docs/CUSTOM_BLOCKS.md) for a complete guide on creating and distributing custom blocks.
 
@@ -352,4 +352,4 @@ This project is open source and available under the MIT License.
 
 ## Acknowledgments
 
-This framework demonstrates fundamental radar signal processing concepts and serves as a foundation for building more complex signal processing pipelines.
+This framework demonstrates fundamental radar signal processing concepts and serves as a foundation for building more complex signal processing graphs.

@@ -7,7 +7,7 @@ custom blocks that work seamlessly with the sigchain framework.
 
 import numpy as np
 from dataclasses import dataclass
-from sigchain import SignalData, Pipeline
+from sigexec import SignalData, Graph
 
 
 # Custom block using dataclass pattern
@@ -139,20 +139,20 @@ def test_custom_generator():
 
 
 def test_custom_blocks_in_pipeline():
-    """Test using custom blocks in Pipeline."""
-    print("Testing custom blocks in Pipeline...")
+    """Test using custom blocks in Graph."""
+    print("Testing custom blocks in Graph...")
     
-    # Create pipeline with mix of custom blocks
-    pipeline = (Pipeline("CustomTest")
+    # Create graph with mix of custom blocks
+    graph = (Graph("CustomTest")
         .add(CustomSignalGenerator(frequency=1000.0), name="Generate")
         .add(CustomAmplifier(gain=2.0), name="Amplify")
         .add(CustomStatistics(), name="Analyze")
         .add(CustomAttenuator(attenuation=0.5), name="Attenuate")
     )
     
-    result = pipeline.run()
+    result = graph.run()
     
-    # Verify pipeline executed correctly
+    # Verify graph executed correctly
     assert result.metadata['generated'] == True
     assert result.metadata['amplified'] == True
     assert result.metadata['attenuated'] == True
@@ -166,7 +166,7 @@ def test_custom_blocks_in_pipeline():
     # Should be close to original after amplify then attenuate
     np.testing.assert_array_almost_equal(result.data, ref_signal.data, decimal=5)
     
-    print("  ✓ Custom blocks work correctly in Pipeline")
+    print("  ✓ Custom blocks work correctly in Graph")
 
 
 def test_custom_blocks_composition():
@@ -196,11 +196,11 @@ def test_custom_blocks_composition():
 
 
 def test_custom_blocks_branching():
-    """Test custom blocks with pipeline branching."""
+    """Test custom blocks with graph branching."""
     print("Testing custom blocks with branching...")
     
-    # Create base pipeline
-    base = (Pipeline("Base")
+    # Create base graph
+    base = (Graph("Base")
         .add(CustomSignalGenerator(frequency=1000.0))
         .add(CustomAmplifier(gain=2.0))
     )
@@ -287,7 +287,7 @@ def run_all_tests():
         print("Summary:")
         print("- Custom dataclass blocks work correctly")
         print("- Custom generators work correctly")
-        print("- Custom blocks integrate with Pipeline")
+        print("- Custom blocks integrate with Graph")
         print("- Custom blocks support composition")
         print("- Custom blocks work with branching/memoization")
         print("- Metadata is preserved correctly")

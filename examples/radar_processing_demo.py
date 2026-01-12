@@ -1,20 +1,20 @@
 """
 Radar Processing Demo
 
-Comprehensive radar signal processing pipeline from LFM generation through
+Comprehensive radar signal processing graph from LFM generation through
 range-Doppler map creation.
 """
 
 import numpy as np
 import pandas as pd
-from sigchain import Pipeline, SignalData
-from sigchain.blocks import (
+from sigexec import Graph, SignalData
+from sigexec.blocks import (
     LFMGenerator,
     StackPulses,
     RangeCompress,
     DopplerCompress,
 )
-from sigchain.diagnostics import (
+from sigexec.diagnostics import (
     plot_timeseries,
     plot_pulse_matrix,
     plot_range_profile,
@@ -48,15 +48,15 @@ def create_dashboard(
     """
     
     # Create dashboard
-    dashboard = sd.Dashboard('Radar Signal Processing Pipeline')
+    dashboard = sd.Dashboard('Radar Signal Processing Graph')
     
     # Create page
-    page = sd.Page('radar-demo', 'Radar Signal Processing Pipeline Demo')
+    page = sd.Page('radar-demo', 'Radar Signal Processing Graph Demo')
     
     # Add title and introduction
-    page.add_header("Radar Signal Processing Pipeline", level=1)
+    page.add_header("Radar Signal Processing Graph", level=1)
     page.add_text("""
-    This demonstration shows the complete radar signal processing pipeline,
+    This demonstration shows the complete radar signal processing graph,
     from LFM waveform generation through to range-Doppler map creation.
     Each stage is visualized with interactive Plotly plots.
     """)
@@ -128,19 +128,19 @@ def create_dashboard(
     # Add code example
     page.add_header("Code Example", level=2)
     page.add_text("""
-    Here's how to reproduce this processing pipeline using sigchain:
+    Here's how to reproduce this processing graph using sigchain:
     """)
     
     code_example = f"""
 import staticdash as sd
-from sigchain import Pipeline
-from sigchain.blocks import LFMGenerator, StackPulses, RangeCompress, DopplerCompress
-from sigchain.diagnostics import plot_timeseries, plot_pulse_matrix, plot_range_profile, plot_range_doppler_map
+from sigexec import Graph
+from sigexec.blocks import LFMGenerator, StackPulses, RangeCompress, DopplerCompress
+from sigexec.diagnostics import plot_timeseries, plot_pulse_matrix, plot_range_profile, plot_range_doppler_map
 
 page = sd.Page('radar', 'Radar Processing')
-page.add_header("Radar Signal Processing Pipeline", level=1)
+page.add_header("Radar Signal Processing Graph", level=1)
 
-result = (Pipeline("Radar")
+result = (Graph("Radar")
     .add(LFMGenerator(num_pulses={num_pulses}, target_delay={target_delay}, 
                        target_doppler={target_doppler}))
     .tap(lambda s: page.add_header("Stage 1: Signal Generation", level=2))
@@ -162,10 +162,10 @@ result = (Pipeline("Radar")
 """
     page.add_syntax(code_example, language='python')
     
-    # Build the pipeline with inline plotting
-    page.add_header("Processing Pipeline", level=2)
+    # Build the graph with inline plotting
+    page.add_header("Processing Graph", level=2)
     
-    signal_rdm = (Pipeline("Radar")
+    signal_rdm = (Graph("Radar")
         .add(LFMGenerator(
             num_pulses=num_pulses,
             pulse_duration=pulse_duration_us * 1e-6,

@@ -7,7 +7,7 @@
 **Simplest and most readable** - Direct chaining with configured blocks:
 
 ```python
-from sigchain.blocks import LFMGenerator, StackPulses, RangeCompress, DopplerCompress
+from sigexec.blocks import LFMGenerator, StackPulses, RangeCompress, DopplerCompress
 
 # Configure blocks (data classes)
 gen = LFMGenerator(num_pulses=128, target_delay=20e-6, target_doppler=1000.0)
@@ -32,16 +32,16 @@ range_doppler_map = signal.data
 - ✅ No boilerplate
 - ✅ Configuration separate from execution
 
-### 2. Pipeline with Fluent Interface
+### 2. Graph with Fluent Interface
 
 **Best for complex chains** - Better organization and debugging:
 
 ```python
-from sigchain import Pipeline
-from sigchain.blocks import LFMGenerator, StackPulses, RangeCompress, DopplerCompress
+from sigexec import Graph
+from sigexec.blocks import LFMGenerator, StackPulses, RangeCompress, DopplerCompress
 
-# Build pipeline with fluent chaining
-result = (Pipeline("RadarProcessing")
+# Build graph with fluent chaining
+result = (Graph("RadarProcessing")
     .add(LFMGenerator(num_pulses=128, target_delay=20e-6, target_doppler=1000.0))
     .add(StackPulses())
     .add(RangeCompress())
@@ -54,7 +54,7 @@ range_doppler_map = result.data
 ```
 
 **Key Features:**
-- ✅ Named pipeline for clarity
+- ✅ Named graph for clarity
 - ✅ Verbose mode for debugging
 - ✅ Tap points for inspection
 - ✅ Clean execution logging
@@ -62,7 +62,7 @@ range_doppler_map = result.data
 
 ## Comparison
 
-| Feature | Direct Chaining | Pipeline |
+| Feature | Direct Chaining | Graph |
 |---------|-----------------|----------|
 | Lines of code | Fewest | Medium |
 | Readability | Excellent | Good |
@@ -70,12 +70,12 @@ range_doppler_map = result.data
 | Type safety | ✅ | ✅ |
 | Configuration | Dataclass | Dataclass |
 | Execution | Direct call | `.run()` |
-| Best for | Simple chains | Complex pipelines |
+| Best for | Simple chains | Complex graphs |
 
 ## Which Should I Use?
 
 - **Starting fresh?** → Use **Direct Chaining** (Approach 1)
-- **Complex pipeline with branching?** → Use **Pipeline** (Approach 2)
+- **Complex graph with branching?** → Use **Graph** (Approach 2)
 
 ## Quick Examples
 
@@ -87,7 +87,7 @@ result = DopplerCompress()(RangeCompress()(StackPulses()(LFMGenerator()())))
 ### Custom Processing Block
 ```python
 from dataclasses import dataclass
-from sigchain import SignalData
+from sigexec import SignalData
 
 @dataclass
 class MyBlock:
@@ -102,9 +102,9 @@ my_block = MyBlock(param=2.5)
 result = my_block(input_signal)
 ```
 
-### Add Custom Operation to Pipeline
+### Add Custom Operation to Graph
 ```python
-pipeline = (Pipeline()
+graph = (Graph()
     .add(LFMGenerator())
     .transform(lambda data: data * 2)  # Custom transform on data array
     .add(StackPulses())
@@ -116,8 +116,8 @@ pipeline = (Pipeline()
 ## Complete Radar Example
 
 ```python
-from sigchain import Pipeline
-from sigchain.blocks import LFMGenerator, StackPulses, RangeCompress, DopplerCompress
+from sigexec import Graph
+from sigexec.blocks import LFMGenerator, StackPulses, RangeCompress, DopplerCompress
 
 # Configure radar
 gen = LFMGenerator(
@@ -142,8 +142,8 @@ signal = StackPulses()(signal)
 signal = RangeCompress()(signal)
 signal = DopplerCompress()(signal)
 
-# Style 3: Pipeline
-signal = (Pipeline()
+# Style 3: Graph
+signal = (Graph()
     .add(gen)
     .add(StackPulses())
     .add(RangeCompress())

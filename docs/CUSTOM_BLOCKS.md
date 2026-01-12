@@ -4,7 +4,7 @@ SigChain is designed to be extensible. You can create your own custom processing
 
 ## Overview
 
-SigChain provides the **framework** for building signal processing pipelines. The radar processing blocks included in `sigchain.blocks` are **examples** of how to use the framework. You are encouraged to create your own blocks for your specific use cases.
+SigChain provides the **framework** for building signal processing graphs. The radar processing blocks included in `sigexec.blocks` are **examples** of how to use the framework. You are encouraged to create your own blocks for your specific use cases.
 
 ## Two Approaches for Custom Blocks
 
@@ -14,7 +14,7 @@ The modern, recommended approach uses Python data classes:
 
 ```python
 from dataclasses import dataclass
-from sigchain import SignalData
+from sigexec import SignalData
 import numpy as np
 
 @dataclass
@@ -50,7 +50,7 @@ result = custom(input_signal)
 
 ## Creating a Custom Block Package
 
-You can distribute your custom blocks as a separate Python package that depends on sigchain.
+You can distribute your custom blocks as a separate Python package that depends on sigexec.
 
 ### Step 1: Create Package Structure
 
@@ -69,7 +69,7 @@ my_blocks/
 **my_blocks/filters.py:**
 ```python
 from dataclasses import dataclass
-from sigchain import SignalData
+from sigexec import SignalData
 from scipy import signal
 import numpy as np
 
@@ -145,10 +145,10 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "my_blocks"
 version = "0.1.0"
-description = "Custom signal processing blocks for sigchain"
+description = "Custom signal processing blocks for sigexec"
 requires-python = ">=3.7"
 dependencies = [
-    "sigchain>=0.1.0",
+    "sigexec>=0.1.0",
     "numpy>=1.20.0",
     "scipy>=1.7.0",
 ]
@@ -161,11 +161,11 @@ dependencies = [
 pip install -e .
 
 # Use in your code
-from sigchain import Pipeline
-from sigchain.blocks import LFMGenerator, StackPulses
+from sigexec import Graph
+from sigexec.blocks import LFMGenerator, StackPulses
 from my_blocks import BandpassFilter, MovingAverage
 
-result = (Pipeline("CustomPipeline")
+result = (Graph("CustomPipeline")
     .add(LFMGenerator(num_pulses=128))
     .add(BandpassFilter(low_freq=1e6, high_freq=5e6))
     .add(MovingAverage(window_size=3))
@@ -294,7 +294,7 @@ Create tests for your custom blocks:
 
 ```python
 import numpy as np
-from sigchain import SignalData
+from sigexec import SignalData
 from my_blocks import BandpassFilter
 
 def test_bandpass_filter():
@@ -327,7 +327,7 @@ Here's a complete example of a custom block package for audio processing:
 ```python
 from dataclasses import dataclass
 import numpy as np
-from sigchain import SignalData
+from sigexec import SignalData
 
 @dataclass
 class Reverb:
@@ -386,20 +386,20 @@ class Compressor:
 __all__ = ['Reverb', 'Compressor']
 ```
 
-## Integration with Pipeline
+## Integration with Graph
 
-Your custom blocks work seamlessly with all sigchain features:
+Your custom blocks work seamlessly with all sigexec features:
 
 ```python
-from sigchain import Pipeline
+from sigexec import Graph
 from my_blocks import BandpassFilter, MovingAverage
 
 # Direct chaining
 filtered = BandpassFilter(1e6, 5e6)(input_signal)
 smoothed = MovingAverage(5)(filtered)
 
-# Pipeline
-result = (Pipeline("CustomPipeline")
+# Graph
+result = (Graph("CustomPipeline")
     .add(BandpassFilter(1e6, 5e6))
     .add(MovingAverage(5))
     .tap(lambda s: print(f"Intermediate shape: {s.shape}"))
@@ -407,7 +407,7 @@ result = (Pipeline("CustomPipeline")
 )
 
 # Branching
-base = Pipeline().add(BandpassFilter(1e6, 5e6))
+base = Graph().add(BandpassFilter(1e6, 5e6))
 branch1 = base.branch().add(MovingAverage(5))
 branch2 = base.branch().add(MovingAverage(10))
 
@@ -419,8 +419,8 @@ result2 = branch2.run()  # Reuses cached filter result
 
 To share your custom blocks with others:
 
-1. **Choose a descriptive name**: `sigchain-audio-blocks`, `sigchain-radar-extras`, etc.
-2. **Add sigchain as a dependency** in your `pyproject.toml`
+1. **Choose a descriptive name**: `sigexec-audio-blocks`, `sigexec-radar-extras`, etc.
+2. **Add sigexec as a dependency** in your `pyproject.toml`
 3. **Write good documentation** in your README
 4. **Include examples** showing how to use your blocks
 5. **Publish to PyPI**: `python -m build && twine upload dist/*`
@@ -430,7 +430,7 @@ To share your custom blocks with others:
 - **Framework vs. Blocks**: SigChain provides the framework. The included radar blocks are examples.
 - **Easy Extension**: Create custom blocks following the `SignalData` contract
 - **Separate Packages**: Distribute custom blocks as independent packages
-- **Full Integration**: Custom blocks work with all Pipeline features (branching, memoization, etc.)
+- **Full Integration**: Custom blocks work with all Graph features (branching, memoization, etc.)
 - **Community**: Share your blocks with others via PyPI
 
 The framework is designed to be minimal and focused, while allowing unlimited extensibility through custom blocks.

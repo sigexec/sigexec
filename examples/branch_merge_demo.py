@@ -1,13 +1,13 @@
 """
 Branch and Merge DAG Processing Demo
 
-Demonstrates how to create parallel processing paths (branches) in a pipeline,
+Demonstrates how to create parallel processing paths (branches) in a graph,
 process data differently in each branch, and then merge the results.
 """
 
 import numpy as np
-from sigchain import Pipeline, SignalData
-from sigchain.diagnostics import plot_timeseries
+from sigexec import Graph, SignalData
+from sigexec.diagnostics import plot_timeseries
 
 try:
     import staticdash as sd
@@ -42,15 +42,15 @@ def create_dashboard() -> sd.Dashboard:
     """)
     
     code_example_1 = """
-from sigchain import Pipeline, SignalData
+from sigexec import Graph, SignalData
 import numpy as np
 
 # Generate a simple signal
 data = SignalData(data=np.sin(2 * np.pi * np.linspace(0, 1, 100)))
 
-# Create pipeline with duplicate branches
-pipeline = (
-    Pipeline("duplicate_branches")
+# Create graph with duplicate branches
+graph = (
+    Graph("duplicate_branches")
     .input_data(data)
     .branch(["high_pass", "low_pass"])  # Duplicate into two branches
     .add(high_pass_filter, branch="high_pass")
@@ -59,7 +59,7 @@ pipeline = (
            combiner=lambda sigs: SignalData(data=sigs[0].data + sigs[1].data))
 )
 
-result = pipeline.run()
+result = graph.run()
 """
     page.add_syntax(code_example_1, language='python')
     
@@ -86,8 +86,8 @@ def combine_mag_phase(sigs):
     complex_data = magnitude * np.exp(1j * phase)
     return SignalData(data=complex_data, metadata=sigs[0].metadata)
 
-pipeline = (
-    Pipeline("feature_extraction")
+graph = (
+    Graph("feature_extraction")
     .input_data(complex_signal)
     .branch(["magnitude", "phase"], 
             functions=[extract_magnitude, extract_phase])
@@ -132,9 +132,9 @@ pipeline = (
             return SignalData(data=sig.data * factor, metadata=sig.metadata)
         return _amplify
     
-    # Create pipeline with branches
-    pipeline = (
-        Pipeline("parallel_filtering")
+    # Create graph with branches
+    graph = (
+        Graph("parallel_filtering")
         .input_data(signal_data)
         .branch(["lowpass", "highpass"])
         .add(low_pass_filter, name="low_pass_filter", branch="lowpass")
@@ -151,7 +151,7 @@ pipeline = (
         )
     )
     
-    result = pipeline.run()
+    result = graph.run()
     
     # Show code
     demo_code = """
@@ -176,9 +176,9 @@ def amplify(factor):
         return SignalData(data=sig.data * factor, metadata=sig.metadata)
     return _amplify
 
-# Create branching pipeline
-pipeline = (
-    Pipeline("parallel_filtering")
+# Create branching graph
+graph = (
+    Graph("parallel_filtering")
     .input_data(signal_data)
     .branch(["lowpass", "highpass"])                    # Split into two paths
     .add(low_pass_filter, branch="lowpass")             # Filter low frequencies
@@ -192,7 +192,7 @@ pipeline = (
            ))
 )
 
-result = pipeline.run()
+result = graph.run()
 """
     page.add_syntax(demo_code, language='python')
     
@@ -204,7 +204,7 @@ result = pipeline.run()
     
     # Get individual branch results by running separate pipelines
     lowpass_pipeline = (
-        Pipeline("lowpass_only")
+        Graph("lowpass_only")
         .input_data(signal_data)
         .add(low_pass_filter, name="low_pass_filter")
         .add(amplify(2.0), name="amplify_low")
@@ -212,7 +212,7 @@ result = pipeline.run()
     lowpass_result = lowpass_pipeline.run()
     
     highpass_pipeline = (
-        Pipeline("highpass_only")
+        Graph("highpass_only")
         .input_data(signal_data)
         .add(high_pass_filter, name="high_pass_filter")
         .add(amplify(3.0), name="amplify_high")
@@ -274,9 +274,9 @@ result = pipeline.run()
         reconstructed = amplitude * np.exp(1j * phase)
         return SignalData(data=reconstructed, metadata=sigs[0].metadata)
     
-    # Create pipeline with function branches
+    # Create graph with function branches
     amp_phase_pipeline = (
-        Pipeline("amplitude_phase_processing")
+        Graph("amplitude_phase_processing")
         .input_data(complex_data)
         .branch(["amplitude", "phase"], 
                 functions=[extract_amplitude, extract_phase])
@@ -318,9 +318,9 @@ def reconstruct_complex(sigs):
     return SignalData(data=amplitude * np.exp(1j * phase), 
                      metadata=sigs[0].metadata)
 
-# Pipeline with function branches
-pipeline = (
-    Pipeline("amplitude_phase_processing")
+# Graph with function branches
+graph = (
+    Graph("amplitude_phase_processing")
     .input_data(complex_data)
     .branch(["amplitude", "phase"],              # Split by function
             functions=[extract_amplitude, extract_phase])
@@ -330,7 +330,7 @@ pipeline = (
            combiner=reconstruct_complex)
 )
 
-result = pipeline.run()
+result = graph.run()
 """
     page.add_syntax(amp_phase_code, language='python')
     
@@ -338,16 +338,16 @@ result = pipeline.run()
     page.add_header("Results", level=3)
     
     # Get branch results by running separate pipelines for each branch
-    amp_raw_pipeline = Pipeline("amp_raw").input_data(complex_data).add(extract_amplitude)
+    amp_raw_pipeline = Graph("amp_raw").input_data(complex_data).add(extract_amplitude)
     raw_amp = amp_raw_pipeline.run()
     
-    amp_smooth_pipeline = Pipeline("amp_smooth").input_data(complex_data).add(extract_amplitude).add(smooth_amplitude)
+    amp_smooth_pipeline = Graph("amp_smooth").input_data(complex_data).add(extract_amplitude).add(smooth_amplitude)
     smoothed_amp = amp_smooth_pipeline.run()
     
-    phase_raw_pipeline = Pipeline("phase_raw").input_data(complex_data).add(extract_phase)
+    phase_raw_pipeline = Graph("phase_raw").input_data(complex_data).add(extract_phase)
     raw_phase = phase_raw_pipeline.run()
     
-    phase_unwrap_pipeline = Pipeline("phase_unwrap").input_data(complex_data).add(extract_phase).add(unwrap_phase)
+    phase_unwrap_pipeline = Graph("phase_unwrap").input_data(complex_data).add(extract_phase).add(unwrap_phase)
     unwrapped_phase = phase_unwrap_pipeline.run()
     
     page.add_text("Amplitude branch processing:")
@@ -376,7 +376,7 @@ result = pipeline.run()
     It's important to understand when to use each approach:
     
     **`.variants()`** - Parameter Exploration:
-    - Explores different configurations of the same pipeline
+    - Explores different configurations of the same graph
     - Duplicates the entire downstream graph for each variant
     - Returns a list of (params, result) tuples
     - Use when you want to compare different parameter settings
@@ -400,8 +400,8 @@ result = pipeline.run()
     combined_code = """
 # Explore different amplification factors using variants
 # While using branches for parallel filtering
-pipeline = (
-    Pipeline("variants_and_branches")
+graph = (
+    Graph("variants_and_branches")
     .input_data(signal_data)
     .variants(amplify, [1.0, 2.0, 5.0], names=["1x", "2x", "5x"])
     .branch(["lowpass", "highpass"])
@@ -414,7 +414,7 @@ pipeline = (
            ))
 )
 
-results = pipeline.run()  # Returns 3 results, one for each amplification factor
+results = graph.run()  # Returns 3 results, one for each amplification factor
 for params, result in results:
     print(f"Amplification: {params['variant'][0]}")
     # Each result is the merged output of the branch processing

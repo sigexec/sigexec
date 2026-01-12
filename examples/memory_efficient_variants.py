@@ -6,7 +6,7 @@ all results in memory by saving each one as it completes.
 """
 
 import numpy as np
-from sigchain import Pipeline, SignalData
+from sigexec import Graph, SignalData
 
 
 def save_variant_result(params, result):
@@ -60,10 +60,10 @@ def main():
             return SignalData(data=amplified, metadata=sig.metadata)
         return _amplify
     
-    # Create pipeline with multiple variants
+    # Create graph with multiple variants
     # This creates 3 × 3 = 9 combinations
-    pipeline = (
-        Pipeline("memory_efficient")
+    graph = (
+        Graph("memory_efficient")
         .input_data(data)
         .variants(apply_window, ['hann', 'hamming', 'blackman'], 
                  names=['Hann', 'Hamming', 'Blackman'])
@@ -77,7 +77,7 @@ def main():
     
     # Run with callback - results are saved incrementally
     # Setting return_results=False means we don't accumulate in memory
-    results = pipeline.run(
+    results = graph.run(
         verbose=False,
         on_variant_complete=save_variant_result,
         return_results=False  # Don't accumulate - saves memory!
@@ -102,7 +102,7 @@ def main():
     
     # Smaller example
     small_pipeline = (
-        Pipeline("with_results")
+        Graph("with_results")
         .input_data(data)
         .variants(amplify, [1.0, 2.0], names=['1x', '2x'])
     )

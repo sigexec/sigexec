@@ -1,7 +1,7 @@
 """
 Memoization Demo
 
-Demonstrates the performance benefits of pipeline memoization when exploring
+Demonstrates the performance benefits of graph memoization when exploring
 parameter variants. Shows how shared computation stages are cached and reused.
 
 Uses simple operations with artificial delays to clearly show the speedup.
@@ -10,7 +10,7 @@ Uses simple operations with artificial delays to clearly show the speedup.
 import numpy as np
 import pandas as pd
 import time
-from sigchain import Pipeline, SignalData
+from sigexec import Graph, SignalData
 
 try:
     import staticdash as sd
@@ -65,7 +65,7 @@ def create_dashboard() -> sd.Dashboard:
     dashboard = sd.Dashboard('Memoization Performance')
     page = sd.Page('memoization-demo', 'Memoization Demo')
     
-    page.add_header("Pipeline Memoization Performance", level=1)
+    page.add_header("Graph Memoization Performance", level=1)
     page.add_text("""
     When exploring parameter variants, pipelines automatically cache (memoize) intermediate results.
     This means shared computation stages only execute once, dramatically improving performance.
@@ -76,7 +76,7 @@ def create_dashboard() -> sd.Dashboard:
     # Demo 1: Show the concept
     page.add_header("Understanding Memoization", level=2)
     page.add_text("""
-    Consider a pipeline that:
+    Consider a graph that:
     1. Loads data (2 seconds - expensive)
     2. Preprocesses data (1.5 seconds - expensive)
     3. Applies different scaling factors (fast, varies per combination)
@@ -100,7 +100,7 @@ def create_dashboard() -> sd.Dashboard:
     
     page.add_header("Code Example", level=2)
     code_example = """
-from sigchain import Pipeline, SignalData
+from sigexec import Graph, SignalData
 import time
 import numpy as np
 
@@ -125,7 +125,7 @@ def cheap_operation(factor):
 
 # With memoization (default)
 start = time.time()
-results_cached = (Pipeline("Cached", enable_cache=True)
+results_cached = (Graph("Cached", enable_cache=True)
     .add(expensive_load_data(delay=2.0))      # Runs once (2s)
     .add(expensive_preprocessing(delay=1.5))  # Runs once (1.5s)
     .variants(cheap_operation, [1.0, 2.0, 3.0], 
@@ -137,7 +137,7 @@ print(f"With cache: {cached_time:.1f}s")  # ~3.5s
 
 # Without memoization
 start = time.time()
-results_uncached = (Pipeline("Uncached", enable_cache=False)
+results_uncached = (Graph("Uncached", enable_cache=False)
     .add(expensive_load_data(delay=2.0))      # Runs 3 times (6s)
     .add(expensive_preprocessing(delay=1.5))  # Runs 3 times (4.5s)
     .variants(cheap_operation, [1.0, 2.0, 3.0],
@@ -161,9 +161,9 @@ print(f"Speedup: {uncached_time/cached_time:.1f}x")  # ~3x
     
     # Test with cache enabled
     page.add_text("\\n**Running with memoization enabled...**")
-    Pipeline._global_cache.clear()
+    Graph._global_cache.clear()
     start_cached = time.time()
-    results_cached = (Pipeline("CachedPipeline", enable_cache=True)
+    results_cached = (Graph("CachedPipeline", enable_cache=True)
         .add(expensive_load_data(delay=load_delay), name="Load Data")
         .add(expensive_preprocessing(delay=preprocess_delay), name="Preprocess")
         .variants(cheap_operation, [1.0, 2.0, 3.0], names=['Scale 1x', 'Scale 2x', 'Scale 3x'])
@@ -172,12 +172,12 @@ print(f"Speedup: {uncached_time/cached_time:.1f}x")  # ~3x
     cached_time = time.time() - start_cached
     
     # Clear cache before uncached run
-    Pipeline._global_cache.clear()
+    Graph._global_cache.clear()
     
     # Test without cache
     page.add_text("\\n**Running without memoization...**")
     start_uncached = time.time()
-    results_uncached = (Pipeline("UncachedPipeline", enable_cache=False)
+    results_uncached = (Graph("UncachedPipeline", enable_cache=False)
         .add(expensive_load_data(delay=load_delay), name="Load Data")
         .add(expensive_preprocessing(delay=preprocess_delay), name="Preprocess")
         .variants(cheap_operation, [1.0, 2.0, 3.0], names=['Scale 1x', 'Scale 2x', 'Scale 3x'])
@@ -255,9 +255,9 @@ print(f"Speedup: {uncached_time/cached_time:.1f}x")  # ~3x
         expected_speedup = expected_uncached / expected_cached
         
         # With cache
-        Pipeline._global_cache.clear()
+        Graph._global_cache.clear()
         start = time.time()
-        _ = (Pipeline("Test", enable_cache=True)
+        _ = (Graph("Test", enable_cache=True)
             .add(expensive_load_data(delay=short_delay))
             .add(expensive_preprocessing(delay=short_delay))
             .variants(cheap_operation, factors, names=names)
@@ -266,9 +266,9 @@ print(f"Speedup: {uncached_time/cached_time:.1f}x")  # ~3x
         cached = time.time() - start
         
         # Without cache
-        Pipeline._global_cache.clear()
+        Graph._global_cache.clear()
         start = time.time()
-        _ = (Pipeline("Test", enable_cache=False)
+        _ = (Graph("Test", enable_cache=False)
             .add(expensive_load_data(delay=short_delay))
             .add(expensive_preprocessing(delay=short_delay))
             .variants(cheap_operation, factors, names=names)
@@ -341,16 +341,16 @@ print(f"Speedup: {uncached_time/cached_time:.1f}x")  # ~3x
     To maximize the benefits of memoization:
     
     1. **Structure pipelines strategically**: Put expensive operations that are common 
-       across variants early in the pipeline, before the first `.variants()` call.
+       across variants early in the graph, before the first `.variants()` call.
     
     2. **Use `.variants()` not loops**: Instead of manually looping over parameters,
        use `.variants()` to let the framework handle caching automatically.
     
     3. **Group similar explorations**: If exploring multiple parameter dimensions,
-       do them in one pipeline rather than separate runs.
+       do them in one graph rather than separate runs.
     
-    4. **Clear cache when needed**: The cache is shared across all Pipeline instances.
-       Clear it with `Pipeline._global_cache.clear()` when starting a new experiment.
+    4. **Clear cache when needed**: The cache is shared across all Graph instances.
+       Clear it with `Graph._global_cache.clear()` when starting a new experiment.
     
     5. **Disable cache for debugging**: Use `enable_cache=False` when debugging or when
        you explicitly want fresh execution (e.g., testing randomness).
@@ -367,7 +367,7 @@ print(f"Speedup: {uncached_time/cached_time:.1f}x")  # ~3x
     - **Iterative development**: Re-running similar experiments during development
     
     It's less helpful when:
-    - Running a single linear pipeline (no variants)
+    - Running a single linear graph (no variants)
     - Every stage is unique (no shared computation)
     - Intermediate results are very large (cache memory overhead)
     """)

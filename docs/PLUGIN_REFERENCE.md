@@ -4,15 +4,15 @@
 
 **SigChain = Framework + Your Blocks**
 
-- **Framework**: `SignalData`, `Pipeline` (in `sigchain.core`)
-- **Example Blocks**: Radar blocks in `sigchain.blocks` (just examples!)
+- **Framework**: `SignalData`, `Graph` (in `sigexec.core`)
+- **Example Blocks**: Radar blocks in `sigexec.blocks` (just examples!)
 - **Your Blocks**: Easy to create, easy to distribute
 
 ## Creating a Custom Block (30 seconds)
 
 ```python
 from dataclasses import dataclass
-from sigchain import SignalData
+from sigexec import SignalData
 
 @dataclass
 class MyBlock:
@@ -33,18 +33,18 @@ That's it! No registration, no complex interfaces.
 ## Using Custom Blocks
 
 ```python
-from sigchain import Pipeline
-from sigchain.blocks import LFMGenerator  # Example block
+from sigexec import Graph
+from sigexec.blocks import LFMGenerator  # Example block
 from my_package import MyBlock            # Your block
 
-result = (Pipeline()
+result = (Graph()
     .add(LFMGenerator())
     .add(MyBlock(param=2.0))
     .run()
 )
 ```
 
-Works seamlessly with all Pipeline features (branching, memoization, etc.).
+Works seamlessly with all Graph features (branching, memoization, etc.).
 
 ## Distributing Custom Blocks
 
@@ -66,7 +66,7 @@ my_blocks/
 [project]
 name = "my_blocks"
 version = "0.1.0"
-dependencies = ["sigchain>=0.1.0"]
+dependencies = ["sigexec>=0.1.0"]
 ```
 
 ### 3. Publish
@@ -96,12 +96,12 @@ pip install my_blocks
 
 ## Real-World Example
 
-**Package: sigchain-audio**
+**Package: sigexec-audio**
 
 ```python
-# sigchain_audio/effects.py
+# sigexec_audio/effects.py
 from dataclasses import dataclass
-from sigchain import SignalData
+from sigexec import SignalData
 import numpy as np
 
 @dataclass
@@ -136,10 +136,10 @@ class EQ:
 
 **Usage:**
 ```python
-from sigchain import Pipeline
-from sigchain_audio import Reverb, EQ
+from sigexec import Graph
+from sigexec_audio import Reverb, EQ
 
-result = (Pipeline("Audio")
+result = (Graph("Audio")
     .add(WavReader("input.wav"))
     .add(Reverb(decay=0.6, delay_ms=100))
     .add(EQ(low_gain=1.2, high_gain=0.8))
@@ -200,7 +200,7 @@ class Filter:
 ```python
 import numpy as np
 from my_blocks import MyBlock
-from sigchain import SignalData
+from sigexec import SignalData
 
 def test_my_block():
     # Create test input
@@ -250,7 +250,7 @@ from my_blocks import MyBlock
 
 ### Why SignalData?
 
-**Consistent type** throughout pipeline:
+**Consistent type** throughout graph:
 - Type safety
 - Easy composition
 - Clear contracts
@@ -272,26 +272,26 @@ A: No! Just implement `__call__(self, SignalData) -> SignalData`
 A: Yes! Mix and match freely.
 
 **Q: How do I handle errors?**
-A: Raise exceptions normally. Pipeline will propagate them.
+A: Raise exceptions normally. Graph will propagate them.
 
 **Q: Can I modify the framework?**
 A: Fork it! But the core is intentionally minimal.
 
 **Q: Where should I put the radar blocks?**
-A: The radar blocks in `sigchain.blocks` are examples. They can stay (for demonstration) or be moved to a separate package like `sigchain-radar`.
+A: The radar blocks in `sigexec.blocks` are examples. They can stay (for demonstration) or be moved to a separate package like `sigexec-radar`.
 
 **Q: Will custom blocks work with future versions?**
 A: Yes! The `SignalData` contract is stable. As long as you follow it, blocks will work.
 
 ## Example Packages You Could Create
 
-- `sigchain-audio`: Audio effects and processing
-- `sigchain-communications`: Modulation, demodulation, channel coding
-- `sigchain-medical`: Medical imaging processing blocks
-- `sigchain-video`: Video processing blocks
-- `sigchain-ml`: Machine learning integration blocks
-- `sigchain-io`: File readers/writers for various formats
-- `sigchain-viz`: Visualization blocks
+- `sigexec-audio`: Audio effects and processing
+- `sigexec-communications`: Modulation, demodulation, channel coding
+- `sigexec-medical`: Medical imaging processing blocks
+- `sigexec-video`: Video processing blocks
+- `sigexec-ml`: Machine learning integration blocks
+- `sigexec-io`: File readers/writers for various formats
+- `sigexec-viz`: Visualization blocks
 
 ## Next Steps
 

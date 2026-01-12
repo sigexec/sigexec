@@ -4,7 +4,7 @@
 
 SigChain follows a clean separation between **framework** and **blocks**:
 
-- **Framework** (Core): The infrastructure for building pipelines (`SignalData`, `Pipeline`)
+- **Framework** (Core): The infrastructure for building graphs (`SignalData`, `Graph`)
 - **Blocks** (Extensions): Processing operations that transform signals
 
 This design allows the framework to remain minimal and focused while supporting unlimited extensibility.
@@ -32,7 +32,7 @@ This design allows the framework to remain minimal and focused while supporting 
 │   ┌──────────────────────────────────────────────────┐  │
 │   │  Core Components                                 │  │
 │   │  • SignalData: Type-safe data container         │  │
-│   │  • Pipeline: Execution and composition engine   │  │
+│   │  • Graph: Execution and composition engine   │  │
 │   └──────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -40,7 +40,7 @@ This design allows the framework to remain minimal and focused while supporting 
 ## Core Framework Components
 
 ### 1. SignalData
-**Purpose**: Type-safe container for signal data flowing through pipelines
+**Purpose**: Type-safe container for signal data flowing through graphs
 
 ```python
 @dataclass
@@ -55,7 +55,7 @@ class SignalData:
 - Easy composition
 - Clear contracts between blocks
 
-### 2. Pipeline
+### 2. Graph
 **Purpose**: Execution engine with composition and optimization features
 
 **Features**:
@@ -67,7 +67,7 @@ class SignalData:
 
 **Example**:
 ```python
-result = (Pipeline("Example")
+result = (Graph("Example")
     .add(Block1())
     .add(Block2())
     .add(Block3())
@@ -83,7 +83,7 @@ Blocks are simple dataclasses implementing `__call__`:
 
 ```python
 from dataclasses import dataclass
-from sigchain import SignalData
+from sigexec import SignalData
 
 @dataclass
 class MyBlock:
@@ -115,25 +115,25 @@ That's it! No complex interfaces or inheritance hierarchies.
 
 ## Package Structure
 
-### Framework Package (sigchain)
+### Framework Package (sigexec)
 
 ```
-sigchain/
-├── __init__.py           # Exports: SignalData, Pipeline
+sigexec/
+├── __init__.py           # Exports: SignalData, Graph
 ├── core/
 │   ├── data.py          # SignalData class
-│   └── pipeline.py      # Pipeline execution engine
+│   └── graph.py      # Graph execution engine
 └── blocks/              # Example blocks (can be in separate package)
     └── functional.py    # Example radar blocks
 ```
 
-### Custom Block Package (e.g., sigchain-audio)
+### Custom Block Package (e.g., sigexec-audio)
 
 ```
-sigchain_audio/
-├── pyproject.toml       # Depends on sigchain>=0.1.0
+sigexec_audio/
+├── pyproject.toml       # Depends on sigexec>=0.1.0
 ├── README.md
-└── sigchain_audio/
+└── sigexec_audio/
     ├── __init__.py      # Export your blocks
     ├── filters.py       # Your custom blocks
     └── effects.py
@@ -146,11 +146,11 @@ sigchain_audio/
 Users import and use blocks directly:
 
 ```python
-from sigchain import Pipeline
-from sigchain.blocks import LFMGenerator  # Example block
+from sigexec import Graph
+from sigexec.blocks import LFMGenerator  # Example block
 from my_blocks import CustomFilter        # Your block
 
-result = (Pipeline()
+result = (Graph()
     .add(LFMGenerator())
     .add(CustomFilter())
     .run()
@@ -162,10 +162,10 @@ result = (Pipeline()
 For larger ecosystems, use namespace packages:
 
 ```python
-# sigchain/plugins/radar.py
-# sigchain/plugins/audio.py
+# sigexec/plugins/radar.py
+# sigexec/plugins/audio.py
 
-from sigchain.plugins import radar, audio
+from sigexec.plugins import radar, audio
 ```
 
 ### 3. Configuration-based Discovery (Future)
@@ -173,9 +173,9 @@ from sigchain.plugins import radar, audio
 Potential future enhancement:
 
 ```yaml
-# pipeline.yaml
-pipeline:
-  - block: sigchain.blocks.LFMGenerator
+# graph.yaml
+graph:
+  - block: sigexec.blocks.LFMGenerator
     params:
       num_pulses: 128
   - block: my_blocks.CustomFilter
@@ -188,7 +188,7 @@ pipeline:
 ### 1. Minimal Framework
 The framework provides only essential infrastructure:
 - Data container (`SignalData`)
-- Execution engine (`Pipeline`)
+- Execution engine (`Graph`)
 
 Everything else is an extension.
 
@@ -202,40 +202,40 @@ Each block package declares its dependencies:
 
 ```toml
 dependencies = [
-    "sigchain>=0.1.0",
+    "sigexec>=0.1.0",
     "numpy>=1.20.0",
     "scipy>=1.7.0",  # If needed by your blocks
 ]
 ```
 
 ### 4. Framework Stability
-The core framework (`SignalData`, `Pipeline`) has a stable API. Blocks can evolve independently.
+The core framework (`SignalData`, `Graph`) has a stable API. Blocks can evolve independently.
 
 ### 5. No Framework Lock-in
 Blocks are just functions that transform `SignalData`. They can be:
 - Used standalone
 - Wrapped in other frameworks
-- Combined with non-sigchain code
+- Combined with non-sigexec code
 
 ## Example: Multiple Block Packages
 
 ```python
-from sigchain import Pipeline
+from sigexec import Graph
 
 # Framework + Example blocks
-from sigchain.blocks import LFMGenerator, StackPulses
+from sigexec.blocks import LFMGenerator, StackPulses
 
 # Third-party audio blocks
-from sigchain_audio import Reverb, Compressor
+from sigexec_audio import Reverb, Compressor
 
 # Third-party medical imaging blocks
-from sigchain_medical import DICOMReader, SegmentationBlock
+from sigexec_medical import DICOMReader, SegmentationBlock
 
 # Your custom blocks
 from my_project.blocks import CustomAnalyzer
 
 # All work together seamlessly
-result = (Pipeline("Multi-domain")
+result = (Graph("Multi-domain")
     .add(LFMGenerator())       # Example radar block
     .add(StackPulses())        # Example radar block
     .add(CustomAnalyzer())     # Your custom block
@@ -297,8 +297,8 @@ Possible additions that maintain the architecture:
 
 1. **Block Registry** (Optional): For discoverability
 2. **Type System**: Enhanced type checking for block compatibility
-3. **Serialization**: Save/load pipeline configurations
-4. **Visualization**: Pipeline DAG visualization
+3. **Serialization**: Save/load graph configurations
+4. **Visualization**: Graph DAG visualization
 5. **Parallel Execution**: Multi-threaded/multi-process execution
 
 All these would be **optional** features that don't break the core simplicity.
@@ -307,7 +307,7 @@ All these would be **optional** features that don't break the core simplicity.
 
 SigChain's architecture separates framework from blocks:
 
-- **Framework**: Minimal, stable infrastructure for building pipelines
+- **Framework**: Minimal, stable infrastructure for building graphs
 - **Blocks**: Extensible processing operations distributed as separate packages
 - **Integration**: Simple import-based composition, no registration required
 
