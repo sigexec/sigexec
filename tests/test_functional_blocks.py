@@ -40,7 +40,7 @@ def test_stack_pulses():
     print("Testing StackPulses...")
     
     data = np.random.randn(16, 32) + 1j * np.random.randn(16, 32)
-    sig = SignalData(data=data, sample_rate=1e6, metadata={})
+    sig = SignalData(data=data, metadata={'sample_rate': 1e6})
     
     stack = StackPulses()
     result = stack(sig)
@@ -74,8 +74,8 @@ def test_range_compress():
     result = compress(sig)
     
     assert isinstance(result, SignalData)
-    # With 'valid' mode: output length = num_samples - pulse_length + 1
-    expected_output_length = num_samples - pulse_length + 1
+    # With 'same' mode: output length = num_samples (maintains input length)
+    expected_output_length = num_samples
     assert result.shape == (num_pulses, expected_output_length)
     assert result.metadata['range_compressed'] == True
     
