@@ -25,9 +25,20 @@ jobs:
           pip install staticdash
 
       - name: Generate docs (publish demos)
-        run: python examples/publish_demos.py docs
+        id: gen_docs
+        run: python examples/publish_demos.py docs || true
+
+      - name: Detect generated docs
+        id: detect_docs
+        run: |
+          if [ -d docs ] && [ -n "$(ls -A docs 2>/dev/null)" ]; then
+            echo "docs_exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "docs_exists=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Build pages (Jekyll)
+        if: steps.detect_docs.outputs.docs_exists == 'true'
         uses: actions/jekyll-build-pages@v1
         with:
           source: ./docs
