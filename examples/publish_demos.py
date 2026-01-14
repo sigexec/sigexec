@@ -28,18 +28,22 @@ except ImportError:
 def discover_demo_modules():
     """
     Discover all *_demo.py files in the examples directory.
-    
+
     Returns:
-        List of (module_name, module_object, slug) tuples
+        Tuple of (modules, failures)
+        - modules: List of (module_name, module_object, slug) tuples
+        - failures: List of (module_name, reason) tuples for modules that failed to load or missing create_dashboard
     """
     examples_dir = Path(__file__).parent
     demo_files = sorted(examples_dir.glob('*_demo.py'))
-    
+
     modules = []
+    failures = []
+
     for demo_file in demo_files:
         module_name = demo_file.stem
         slug = module_name.replace('_', '-')
-        
+
         # Dynamically import the module
         spec = importlib.util.spec_from_file_location(module_name, demo_file)
         if spec and spec.loader:
@@ -50,11 +54,15 @@ def discover_demo_modules():
                 if hasattr(module, 'create_dashboard'):
                     modules.append((module_name, module, slug))
                 else:
-                    print(f"Warning: {demo_file.name} missing create_dashboard() function, skipping")
+                    reason = 'missing create_dashboard()'
+                    print(f"Error: {demo_file.name} {reason}, will cause publish to fail")
+                    failures.append((module_name, reason))
             except Exception as e:
-                print(f"Error loading {demo_file.name}: {e}")
-    
-    return modules
+                reason = str(e)
+                print(f"Error loading {demo_file.name}: {reason}")
+                failures.append((module_name, reason))
+
+    return modules, failures
 
 
 def publish_all_demos(output_dir='docs'):
@@ -69,16 +77,23 @@ def publish_all_demos(output_dir='docs'):
     print("="*70 + "\n")
     
     # Discover demo modules
-    demo_modules = discover_demo_modules()
-    
-    if not demo_modules:
+    demo_modules, failures = discover_demo_modules()
+
+    if not demo_modules and not failures:
         print("No demo modules found!")
         return
-    
+
     print(f"Found {len(demo_modules)} demo(s):\n")
     for module_name, _, slug in demo_modules:
         print(f"  - {module_name} → {slug}/")
     print()
+
+    # Report discovered failures (loading or missing dashboards)
+    if failures:
+        print("The following demo modules failed discovery:")
+        for name, reason in failures:
+            print(f"  - {name}: {reason}")
+        print()
     
     # Create directory to hold multiple dashboards
     directory = sd.Directory(
@@ -88,6 +103,7 @@ def publish_all_demos(output_dir='docs'):
     
     # Create and add each dashboard
     slugs = []
+    had_errors = len(failures) > 0
     for module_name, module, slug in demo_modules:
         print(f"Creating {module_name}...")
         try:
@@ -96,15 +112,20 @@ def publish_all_demos(output_dir='docs'):
             slugs.append((slug, dashboard.title))
             print(f"  ✓ Success")
         except Exception as e:
+            had_errors = True
             print(f"  ✗ Error: {e}")
             import traceback
             traceback.print_exc()
             continue
-    
+
     # Publish everything to output directory
+    if had_errors:
+        print("\nOne or more demos failed to build. Aborting publish with error.")
+        sys.exit(1)
+
     print(f"\nPublishing dashboards to {output_dir}/...")
     directory.publish(output_dir)
-    
+
     print(f"\n{'='*70}")
     print("✓ Dashboards created successfully!")
     print(f"{'='*70}")
