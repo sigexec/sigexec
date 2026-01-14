@@ -13,9 +13,12 @@ Implemented features:
 
 import ast
 import inspect
+import logging
 from typing import Callable, Set, Optional, Dict, Any
 from collections.abc import MutableMapping
 from .data import GraphData
+
+logger = logging.getLogger(__name__)
 
 
 class PortAccessTracker(MutableMapping):
@@ -178,14 +181,20 @@ class PortAnalyzer:
         Returns None if unknown (consumer should assume all keys are needed).
         """
         static_keys = PortAnalyzer.analyze_operation_static(operation)
+        op_name = getattr(operation, '__name__', str(operation))
         if static_keys is not None and len(static_keys) > 0:
+            logger.debug(f"PortAnalyzer: static analysis determined keys {static_keys} for {op_name}")
             return static_keys
 
         if sample_input is not None:
             runtime_keys = PortAnalyzer.analyze_operation_runtime(operation, sample_input)
             if len(runtime_keys) > 0:
+                logger.debug(f"PortAnalyzer: runtime analysis determined keys {runtime_keys} for {op_name}")
                 return runtime_keys
+            else:
+                logger.debug(f"PortAnalyzer: runtime analysis found no keys for {op_name}")
 
+        logger.debug(f"PortAnalyzer: could not determine accessed keys for {op_name}; falling back to full metadata")
         return None
 
 

@@ -41,6 +41,11 @@ def test_port_access_tracker_reads_and_writes():
     assert tracker['c'] == 3
 
 
+def op_dynamic(g):
+    key = "dyn"
+    return g.ports[key]
+
+
 def test_create_and_merge_subsets():
     full = {"a": 1, "b": 2, "c": 3}
     subset = create_port_subset(full, {"a", "c"})
@@ -51,3 +56,22 @@ def test_create_and_merge_subsets():
 
     intersected = merge_port_subsets([{"a": 1, "b": 2}, {"b": 2, "c": 3}], strategy='intersection')
     assert intersected == {"b": 2}
+
+
+def test_logging_static_and_runtime(caplog):
+    import logging
+    caplog.set_level(logging.DEBUG)
+
+    # Static detection should log a static analysis message
+    PortAnalyzer.get_operation_metadata_keys(_op_attr)
+    assert "static analysis determined keys" in caplog.text.lower()
+    assert "data" in caplog.text
+
+    caplog.clear()
+
+    # Runtime detection for dynamic key should log a runtime analysis message
+    sample = GraphData()
+    sample.dyn = 7
+    PortAnalyzer.get_operation_metadata_keys(op_dynamic, sample)
+    assert "runtime analysis determined keys" in caplog.text.lower()
+    assert "dyn" in caplog.text
