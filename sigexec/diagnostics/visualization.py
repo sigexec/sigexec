@@ -37,8 +37,10 @@ def plot_timeseries(
     Returns:
         Plotly Figure object
     """
-    data = signal_data.data
-    
+    data = signal_data.get('data', signal_data.get('signal'))
+    if data is None:
+        raise AttributeError(f"Port 'data' not found. Available ports: {list(signal_data.ports.keys())}")
+
     # Flatten if multidimensional (take first row for display)
     if data.ndim > 1:
         data = data[0, :]
@@ -116,10 +118,16 @@ def plot_pulse_matrix(
     Returns:
         Plotly Figure object
     """
-    data = signal_data.data
-    
+    data = signal_data.get('data', signal_data.get('signal'))
+    if data is None:
+        raise AttributeError(f"Port 'data' not found. Available ports: {list(signal_data.ports.keys())}")
+
     if data.ndim != 2:
-        raise ValueError("Data must be 2D for pulse matrix plot")
+        # Allow single pulse vectors (1D) by reshaping to 2D
+        if data.ndim == 1:
+            data = data.reshape(1, -1)
+        else:
+            raise ValueError("Data must be 2D for pulse matrix plot")
     
     # Convert to magnitude
     magnitude = np.abs(data)
@@ -176,8 +184,10 @@ def plot_range_profile(
     Returns:
         Plotly Figure object
     """
-    data = signal_data.data
-    
+    data = signal_data.get('data', signal_data.get('signal'))
+    if data is None:
+        raise AttributeError(f"Port 'data' not found. Available ports: {list(signal_data.ports.keys())}")
+
     if data.ndim == 1:
         profile = data
     elif pulse_index is not None:
@@ -262,8 +272,10 @@ def plot_range_doppler_map(
     Returns:
         Plotly Figure object
     """
-    data = signal_data.data
-    
+    data = signal_data.get('data', signal_data.get('signal'))
+    if data is None:
+        raise AttributeError(f"Port 'data' not found. Available ports: {list(signal_data.ports.keys())}")
+
     if data.ndim != 2:
         raise ValueError("Data must be 2D for range-Doppler map")
     

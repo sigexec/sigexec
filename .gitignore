@@ -221,3 +221,6 @@ docs/radar-processing/
 docs/custom-blocks-tutorial/
 docs/*-dashboard/
 
+
+docs_local/
+docs_test/
