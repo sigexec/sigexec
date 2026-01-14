@@ -105,14 +105,14 @@ import time
 import numpy as np
 
 # Define operations with artificial delays
-def expensive_load_data(delay=2.0):
+def expensive_load_data(delay=0.2):
     def load(_):
         time.sleep(delay)  # Simulate expensive operation
         data = np.random.randn(1000)
         return GraphData(data, metadata={'sample_rate': 1e6})
     return load
 
-def expensive_preprocessing(delay=1.5):
+def expensive_preprocessing(delay=0.15):
     def preprocess(signal_data):
         time.sleep(delay)  # Simulate expensive operation
         return GraphData(signal_data.data * 2, signal_data.metadata)
@@ -126,26 +126,26 @@ def cheap_operation(factor):
 # With memoization (default)
 start = time.time()
 results_cached = (Graph("Cached", enable_cache=True)
-    .add(expensive_load_data(delay=2.0))      # Runs once (2s)
-    .add(expensive_preprocessing(delay=1.5))  # Runs once (1.5s)
+    .add(expensive_load_data(delay=0.2))      # Runs once (0.2s)
+    .add(expensive_preprocessing(delay=0.15))  # Runs once (0.15s)
     .variants(cheap_operation, [1.0, 2.0, 3.0], 
               names=['1x', '2x', '3x'])        # Runs 3 times (fast)
     .run()
 )
 cached_time = time.time() - start
-print(f"With cache: {cached_time:.1f}s")  # ~3.5s
+print(f"With cache: {cached_time:.1f}s")  # ~0.35s
 
 # Without memoization
 start = time.time()
 results_uncached = (Graph("Uncached", enable_cache=False)
-    .add(expensive_load_data(delay=2.0))      # Runs 3 times (6s)
-    .add(expensive_preprocessing(delay=1.5))  # Runs 3 times (4.5s)
+    .add(expensive_load_data(delay=0.2))      # Runs 3 times (0.6s)
+    .add(expensive_preprocessing(delay=0.15))  # Runs 3 times (0.45s)
     .variants(cheap_operation, [1.0, 2.0, 3.0],
               names=['1x', '2x', '3x'])        # Runs 3 times (fast)
     .run()
 )
 uncached_time = time.time() - start
-print(f"Without cache: {uncached_time:.1f}s")  # ~10.5s
+print(f"Without cache: {uncached_time:.1f}s")  # ~1.05s
 print(f"Speedup: {uncached_time/cached_time:.1f}x")  # ~3x
 """
     page.add_syntax(code_example, language='python')
