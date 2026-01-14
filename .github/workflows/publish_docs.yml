@@ -46,6 +46,7 @@ jobs:
         run: |
           mkdir -p gh-pages
           cp -r docs/* gh-pages/ || true
+          touch gh-pages/.nojekyll
 
       - name: Deploy to GitHub Pages (peaceiris)
         if: steps.detect_docs.outputs.docs_exists == 'true'
