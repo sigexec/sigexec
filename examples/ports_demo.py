@@ -108,6 +108,57 @@ def create_dashboard() -> 'sd.Dashboard':
     page.add_text('Result ports:')
     page.add_text(f"Available ports after run: {list(result.ports.keys())}")
 
+    # ------------------------------------------------------------------
+    # Decorator usage example (explicit contract)
+    # ------------------------------------------------------------------
+    page.add_header('Decorator example: @PortAnalyzer.requires_ports', level=2)
+    page.add_text(
+        'You can explicitly declare required ports for a stage using the decorator: '
+        '`@PortAnalyzer.requires_ports("a", "b")`. This is deterministic and avoids '
+        'runtime instrumentation. Strict mode will raise if the stage accesses '
+        'undeclared ports.'
+    )
+
+    from sigexec.core.port_optimizer import PortAnalyzer
+
+    @PortAnalyzer.requires_ports('a')
+    def declared_op(g: GraphData) -> GraphData:
+        """Declared operation that only needs 'a'."""
+        g.a_out = g.a + 99
+        return g
+
+    @PortAnalyzer.requires_ports('a')
+    def declared_bad(g: GraphData) -> GraphData:
+        """Declared to need only 'a' but attempts to read 'b' (should fail in strict mode)."""
+        # Using .get will be intercepted by strict-mode enforcement
+        _ = g.get('b', None)
+        g.a_out = g.a + 1
+        return g
+
+    sample2 = GraphData()
+    sample2.a = 10
+    sample2.b = 123
+
+    # Run declared op with strict enforcement enabled (should succeed)
+    g_decl = Graph(name='DeclaredOK', optimize_ports=True, optimize_ports_strict=True).add(declared_op, name='declared_op')
+    res_decl = g_decl.run(sample2)
+
+    page.add_text('Declared op result ports:')
+    page.add_text(f"{list(res_decl.ports.keys())}")
+
+    # Run the bad declared op and capture error (strict mode should raise)
+    g_bad = Graph(name='DeclaredBad', optimize_ports=True, optimize_ports_strict=True).add(declared_bad, name='declared_bad')
+    try:
+        g_bad.run(sample2)
+        bad_msg = 'No error raised (unexpected)'
+    except Exception as e:
+        bad_msg = str(e)
+
+    page.add_text('Declared bad op (should error in strict mode):')
+    page.add_text(f"```
+{bad_msg}
+```")
+
     dashboard.add_page(page)
 
     return dashboard
