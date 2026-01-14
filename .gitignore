@@ -218,5 +218,3 @@ docs/radar-processing/
 docs/custom-blocks-tutorial/
 docs/*-dashboard/
 
-# Ignore generated docs
-docs/
