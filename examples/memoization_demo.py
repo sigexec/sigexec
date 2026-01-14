@@ -10,7 +10,7 @@ Uses simple operations with artificial delays to clearly show the speedup.
 import numpy as np
 import pandas as pd
 import time
-from sigexec import Graph, SignalData
+from sigexec import Graph, GraphData
 
 try:
     import staticdash as sd
@@ -25,30 +25,30 @@ def expensive_load_data(delay: float = 0.2):
     def load(_):
         time.sleep(delay)
         data = np.random.randn(1000) + 1j * np.random.randn(1000)
-        return SignalData(data, metadata={'sample_rate': 1e6, 'stage': 'loaded'})
+        return GraphData(data=data, metadata={'sample_rate': 1e6, 'stage': 'loaded'})
     return load
 
 
 def expensive_preprocessing(delay: float = 0.15):
     """Simulates expensive preprocessing (e.g., filtering, calibration)."""
-    def preprocess(signal_data: SignalData):
+    def preprocess(signal_data: GraphData):
         time.sleep(delay)
         data = signal_data.data * np.exp(1j * 0.1)  # Simple phase shift
         metadata = signal_data.metadata.copy()
         metadata['stage'] = 'preprocessed'
-        return SignalData(data, metadata)
+        return GraphData(data=data, metadata=metadata)
     return preprocess
 
 
 def cheap_operation(label: str, factor: float = 1.0):
     """Fast operation that varies by parameter."""
-    def process(signal_data: SignalData):
+    def process(signal_data: GraphData):
         # No sleep - this is actually fast
         data = signal_data.data * factor
         metadata = signal_data.metadata.copy()
         metadata['stage'] = label
         metadata['factor'] = factor
-        return SignalData(data, metadata)
+        return GraphData(data=data, metadata=metadata)
     return process
 
 
@@ -100,7 +100,7 @@ def create_dashboard() -> sd.Dashboard:
     
     page.add_header("Code Example", level=2)
     code_example = """
-from sigexec import Graph, SignalData
+from sigexec import Graph, GraphData
 import time
 import numpy as np
 
@@ -109,18 +109,18 @@ def expensive_load_data(delay=2.0):
     def load(_):
         time.sleep(delay)  # Simulate expensive operation
         data = np.random.randn(1000)
-        return SignalData(data, metadata={'sample_rate': 1e6})
+        return GraphData(data, metadata={'sample_rate': 1e6})
     return load
 
 def expensive_preprocessing(delay=1.5):
     def preprocess(signal_data):
         time.sleep(delay)  # Simulate expensive operation
-        return SignalData(signal_data.data * 2, signal_data.metadata)
+        return GraphData(signal_data.data * 2, signal_data.metadata)
     return preprocess
 
 def cheap_operation(factor):
     def process(signal_data):
-        return SignalData(signal_data.data * factor, signal_data.metadata)
+        return GraphData(signal_data.data * factor, signal_data.metadata)
     return process
 
 # With memoization (default)

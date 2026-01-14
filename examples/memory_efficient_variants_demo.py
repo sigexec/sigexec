@@ -6,7 +6,7 @@ all results in memory by saving each one as it completes.
 """
 
 import numpy as np
-from sigexec import Graph, SignalData
+from sigexec import Graph, GraphData
 
 
 def save_variant_result(params, result):
@@ -34,7 +34,7 @@ def main():
     # Generate test signal
     t = np.linspace(0, 1, 1000)
     signal = np.sin(2 * np.pi * 10 * t) + 0.5 * np.sin(2 * np.pi * 50 * t)
-    data = SignalData(data=signal, metadata={'sample_rate': 1000.0})
+    data = GraphData(data=signal, metadata={'sample_rate': 1000.0})
     
     # Define processing functions
     def apply_window(window_type):
@@ -50,14 +50,14 @@ def main():
                 window = np.ones(len(sig.data))
             
             windowed = sig.data * window
-            return SignalData(data=windowed, metadata=sig.metadata)
+            return GraphData(data=windowed, metadata=sig.metadata)
         return _apply
     
     def amplify(gain):
         """Factory for amplification."""
         def _amplify(sig):
             amplified = sig.data * gain
-            return SignalData(data=amplified, metadata=sig.metadata)
+            return GraphData(data=amplified, metadata=sig.metadata)
         return _amplify
     
     # Create graph with multiple variants

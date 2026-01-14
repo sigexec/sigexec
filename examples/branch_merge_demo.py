@@ -6,7 +6,7 @@ process data differently in each branch, and then merge the results.
 """
 
 import numpy as np
-from sigexec import Graph, SignalData
+from sigexec import Graph, GraphData
 from sigexec.diagnostics import plot_timeseries
 
 try:
@@ -42,11 +42,11 @@ def create_dashboard() -> sd.Dashboard:
     """)
     
     code_example_1 = """
-from sigexec import Graph, SignalData
+from sigexec import Graph, GraphData
 import numpy as np
 
 # Generate a simple signal
-data = SignalData(data=np.sin(2 * np.pi * np.linspace(0, 1, 100)))
+data = GraphData(data=np.sin(2 * np.pi * np.linspace(0, 1, 100)))
 
 # Create graph with duplicate branches
 graph = (
@@ -56,7 +56,7 @@ graph = (
     .add(high_pass_filter, branch="high_pass")
     .add(low_pass_filter, branch="low_pass")
     .merge(["high_pass", "low_pass"], 
-           combiner=lambda sigs: SignalData(data=sigs[0].data + sigs[1].data))
+           combiner=lambda sigs: GraphData(data=sigs[0].data + sigs[1].data))
 )
 
 result = graph.run()
@@ -73,10 +73,10 @@ result = graph.run()
     code_example_2 = """
 # Extract different features into separate branches
 def extract_magnitude(sig):
-    return SignalData(data=np.abs(sig.data))
+    return GraphData(data=np.abs(sig.data))
 
 def extract_phase(sig):
-    return SignalData(data=np.angle(sig.data))
+    return GraphData(data=np.angle(sig.data))
 
 # Combiner to reconstruct complex signal from magnitude and phase
 def combine_mag_phase(sigs):
@@ -84,7 +84,7 @@ def combine_mag_phase(sigs):
     magnitude = sigs[0].data  # First branch: magnitude
     phase = sigs[1].data      # Second branch: phase
     complex_data = magnitude * np.exp(1j * phase)
-    return SignalData(data=complex_data, metadata=sigs[0].metadata)
+    return GraphData(data=complex_data, metadata=sigs[0].metadata)
 
 graph = (
     Graph("feature_extraction")
@@ -110,26 +110,26 @@ graph = (
     t = np.linspace(0, 1, 1000)
     # Mix of low freq (5 Hz) and high freq (50 Hz)
     signal = np.sin(2 * np.pi * 5 * t) + 0.5 * np.sin(2 * np.pi * 50 * t)
-    signal_data = SignalData(data=signal, metadata={'sample_rate': 1000.0})
+    signal_data = GraphData(data=signal, metadata={'sample_rate': 1000.0})
     
     # Define filters
     def low_pass_filter(sig):
         """Simple moving average low-pass filter."""
         window = 20
         filtered = np.convolve(sig.data, np.ones(window)/window, mode='same')
-        return SignalData(data=filtered, metadata=sig.metadata)
+        return GraphData(data=filtered, metadata=sig.metadata)
     
     def high_pass_filter(sig):
         """High-pass filter (signal minus low-pass)."""
         window = 20
         low_passed = np.convolve(sig.data, np.ones(window)/window, mode='same')
         high_passed = sig.data - low_passed
-        return SignalData(data=high_passed, metadata=sig.metadata)
+        return GraphData(data=high_passed, metadata=sig.metadata)
     
     def amplify(factor):
         """Create an amplification function."""
         def _amplify(sig):
-            return SignalData(data=sig.data * factor, metadata=sig.metadata)
+            return GraphData(data=sig.data * factor, metadata=sig.metadata)
         return _amplify
     
     # Create graph with branches
@@ -142,7 +142,7 @@ graph = (
         .add(amplify(2.0), name="amplify_low", branch="lowpass")
         .add(amplify(3.0), name="amplify_high", branch="highpass")
         .merge(
-            lambda branches: SignalData(
+            lambda branches: GraphData(
                 data=branches['lowpass'].data + branches['highpass'].data,
                 metadata=branches['lowpass'].metadata
             ),
@@ -158,22 +158,22 @@ graph = (
 # Generate mixed frequency signal
 t = np.linspace(0, 1, 1000)
 signal = np.sin(2*np.pi*5*t) + 0.5*np.sin(2*np.pi*50*t)
-signal_data = SignalData(data=signal, metadata={'sample_rate': 1000.0})
+signal_data = GraphData(data=signal, metadata={'sample_rate': 1000.0})
 
 # Define filters
 def low_pass_filter(sig):
     window = 20
     filtered = np.convolve(sig.data, np.ones(window)/window, mode='same')
-    return SignalData(data=filtered, metadata=sig.metadata)
+    return GraphData(data=filtered, metadata=sig.metadata)
 
 def high_pass_filter(sig):
     window = 20
     low_passed = np.convolve(sig.data, np.ones(window)/window, mode='same')
-    return SignalData(data=sig.data - low_passed, metadata=sig.metadata)
+    return GraphData(data=sig.data - low_passed, metadata=sig.metadata)
 
 def amplify(factor):
     def _amplify(sig):
-        return SignalData(data=sig.data * factor, metadata=sig.metadata)
+        return GraphData(data=sig.data * factor, metadata=sig.metadata)
     return _amplify
 
 # Create branching graph
@@ -186,7 +186,7 @@ graph = (
     .add(amplify(2.0), branch="lowpass")                # Amplify low 2x
     .add(amplify(3.0), branch="highpass")               # Amplify high 3x
     .merge(["lowpass", "highpass"],                     # Combine results
-           combiner=lambda sigs: SignalData(
+           combiner=lambda sigs: GraphData(
                data=sigs[0].data + sigs[1].data,
                metadata=sigs[0].metadata
            ))
@@ -243,28 +243,28 @@ result = graph.run()
     i_component = np.cos(2 * np.pi * 10 * t) * (1 + 0.3 * np.sin(2 * np.pi * 2 * t))
     q_component = np.sin(2 * np.pi * 10 * t) * (1 + 0.3 * np.sin(2 * np.pi * 2 * t))
     complex_signal = i_component + 1j * q_component
-    complex_data = SignalData(data=complex_signal, metadata={'sample_rate': 1000.0, 'type': 'IQ'})
+    complex_data = GraphData(data=complex_signal, metadata={'sample_rate': 1000.0, 'type': 'IQ'})
     
     # Define extraction functions
     def extract_amplitude(sig):
         """Extract amplitude (magnitude) from complex signal."""
-        return SignalData(data=np.abs(sig.data), metadata=sig.metadata)
+        return GraphData(data=np.abs(sig.data), metadata=sig.metadata)
     
     def extract_phase(sig):
         """Extract phase from complex signal."""
-        return SignalData(data=np.angle(sig.data), metadata=sig.metadata)
+        return GraphData(data=np.angle(sig.data), metadata=sig.metadata)
     
     # Define processing functions
     def smooth_amplitude(sig):
         """Smooth amplitude with moving average."""
         window = 50
         smoothed = np.convolve(sig.data, np.ones(window)/window, mode='same')
-        return SignalData(data=smoothed, metadata=sig.metadata)
+        return GraphData(data=smoothed, metadata=sig.metadata)
     
     def unwrap_phase(sig):
         """Unwrap phase to remove discontinuities."""
         unwrapped = np.unwrap(sig.data)
-        return SignalData(data=unwrapped, metadata=sig.metadata)
+        return GraphData(data=unwrapped, metadata=sig.metadata)
     
     # Combiner to reconstruct
     def reconstruct_complex(sigs):
@@ -272,7 +272,7 @@ result = graph.run()
         amplitude = sigs[0].data
         phase = sigs[1].data
         reconstructed = amplitude * np.exp(1j * phase)
-        return SignalData(data=reconstructed, metadata=sigs[0].metadata)
+        return GraphData(data=reconstructed, metadata=sigs[0].metadata)
     
     # Create graph with function branches
     amp_phase_pipeline = (
@@ -298,26 +298,26 @@ t = np.linspace(0, 1, 1000)
 i_component = np.cos(2*np.pi*10*t) * (1 + 0.3*np.sin(2*np.pi*2*t))
 q_component = np.sin(2*np.pi*10*t) * (1 + 0.3*np.sin(2*np.pi*2*t))
 complex_signal = i_component + 1j * q_component
-complex_data = SignalData(data=complex_signal, metadata={'sample_rate': 1000.0})
+complex_data = GraphData(data=complex_signal, metadata={'sample_rate': 1000.0})
 
 # Define extraction and processing
 def extract_amplitude(sig):
-    return SignalData(data=np.abs(sig.data), metadata=sig.metadata)
+    return GraphData(data=np.abs(sig.data), metadata=sig.metadata)
 
 def extract_phase(sig):
-    return SignalData(data=np.angle(sig.data), metadata=sig.metadata)
+    return GraphData(data=np.angle(sig.data), metadata=sig.metadata)
 
 def smooth_amplitude(sig):
     window = 50
     smoothed = np.convolve(sig.data, np.ones(window)/window, mode='same')
-    return SignalData(data=smoothed, metadata=sig.metadata)
+    return GraphData(data=smoothed, metadata=sig.metadata)
 
 def unwrap_phase(sig):
-    return SignalData(data=np.unwrap(sig.data), metadata=sig.metadata)
+    return GraphData(data=np.unwrap(sig.data), metadata=sig.metadata)
 
 def reconstruct_complex(sigs):
     amplitude, phase = sigs[0].data, sigs[1].data
-    return SignalData(data=amplitude * np.exp(1j * phase), 
+    return GraphData(data=amplitude * np.exp(1j * phase), 
                      metadata=sigs[0].metadata)
 
 # Graph with function branches
@@ -367,7 +367,7 @@ result = graph.run()
     page.add_plot(fig_phase_unwrap)
     
     page.add_text("Reconstructed complex signal (real part shown):")
-    reconstructed_real = SignalData(data=np.real(amp_phase_result.data), 
+    reconstructed_real = GraphData(data=np.real(amp_phase_result.data), 
                                     metadata=amp_phase_result.metadata)
     fig_recon = plot_timeseries(reconstructed_real, title="Reconstructed Signal (Real Part)")
     page.add_plot(fig_recon)
@@ -410,7 +410,7 @@ graph = (
     .add(low_pass_filter, branch="lowpass")
     .add(high_pass_filter, branch="highpass")
     .merge(["lowpass", "highpass"], 
-           combiner=lambda sigs: SignalData(
+           combiner=lambda sigs: GraphData(
                data=sigs[0].data + sigs[1].data,
                metadata=sigs[0].metadata
            ))
@@ -430,7 +430,7 @@ for params, result in results:
     - **Duplicate mode**: `.branch(["a", "b"])` copies data to both branches
     - **Function mode**: `.branch(["a", "b"], functions=[fa, fb])` applies functions to create branch data
     - **Merge** combines branch results with a custom combiner function
-    - **Combiner** receives a list of SignalData in the order of branch names
+    - **Combiner** receives a list of GraphData in the order of branch names
     - **Targeting**: Use `branch="name"` in `.add()` to target specific branches
     - **Caching**: Each branch operation is cached independently
     - **Variants**: Can be combined with branches for parameter exploration within DAG structure

@@ -7,7 +7,7 @@ range-Doppler map creation.
 
 import numpy as np
 import pandas as pd
-from sigexec import Graph, SignalData
+from sigexec import Graph, GraphData
 from sigexec.blocks import (
     LFMGenerator,
     StackPulses,

@@ -6,7 +6,7 @@ through named ports with no privileged "data" port.
 """
 
 import numpy as np
-from sigexec import GraphData, Graph, SignalData
+from sigexec import GraphData, Graph
 
 
 def main():

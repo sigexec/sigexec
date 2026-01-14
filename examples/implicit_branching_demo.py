@@ -10,7 +10,7 @@ different operations use different metadata fields, reducing memory overhead.
 """
 
 import numpy as np
-from sigexec import Graph, SignalData
+from sigexec import Graph, GraphData
 
 
 def main():
@@ -29,24 +29,24 @@ def main():
     print("receive optimized metadata subsets, saving memory.")
     print()
     
-    def uses_sample_rate(sig: SignalData) -> SignalData:
+    def uses_sample_rate(sig: GraphData) -> GraphData:
         """Operation that only needs sample_rate from metadata."""
         sr = sig.metadata['sample_rate']
         scaled = sig.data * sr
         new_metadata = sig.metadata.copy()
         new_metadata['processed'] = True
-        return SignalData(scaled, metadata=new_metadata)
+        return GraphData(scaled, metadata=new_metadata)
     
-    def uses_frequency(sig: SignalData) -> SignalData:
+    def uses_frequency(sig: GraphData) -> GraphData:
         """Operation that only needs center_frequency from metadata."""
         fc = sig.metadata['center_frequency']
         shifted = sig.data * np.exp(2j * np.pi * fc * np.arange(len(sig.data)))
         new_metadata = sig.metadata.copy()
         new_metadata['shifted'] = True
-        return SignalData(shifted, metadata=new_metadata)
+        return GraphData(shifted, metadata=new_metadata)
     
     # Create signal with multiple metadata fields
-    signal = SignalData(
+    signal = GraphData(
         data=np.random.randn(100),
         metadata={
             'sample_rate': 1000.0,
@@ -96,30 +96,30 @@ def main():
     print("execute independently with implicit branching (no explicit branch/merge).")
     print()
     
-    def extract_signal_stats(sig: SignalData) -> SignalData:
+    def extract_signal_stats(sig: GraphData) -> GraphData:
         """Analyzes signal statistics - doesn't need metadata."""
         stats = {
             'mean': float(np.mean(np.abs(sig.data))),
             'std': float(np.std(np.abs(sig.data))),
             'peak': float(np.max(np.abs(sig.data)))
         }
-        return SignalData(sig.data, metadata={**sig.metadata, 'stats': stats})
+        return GraphData(sig.data, metadata={**sig.metadata, 'stats': stats})
     
-    def apply_antenna_calibration(sig: SignalData) -> SignalData:
+    def apply_antenna_calibration(sig: GraphData) -> GraphData:
         """Applies antenna-specific calibration - needs antenna field."""
         antenna = sig.metadata['antenna']
         # Simulate antenna-specific gain correction
         gain = {'array_1': 1.2, 'array_2': 1.5}.get(antenna, 1.0)
         calibrated = sig.data * gain
-        return SignalData(calibrated, metadata={**sig.metadata, 'calibrated': True})
+        return GraphData(calibrated, metadata={**sig.metadata, 'calibrated': True})
     
-    def apply_timestamp_correction(sig: SignalData) -> SignalData:
+    def apply_timestamp_correction(sig: GraphData) -> GraphData:
         """Applies time-dependent correction - needs timestamp field."""
         timestamp = sig.metadata['timestamp']
         # Simulate time-based phase correction
         phase_corr = np.exp(1j * 0.1 * np.arange(len(sig.data)))
         corrected = sig.data * phase_corr
-        return SignalData(corrected, metadata={**sig.metadata, 'time_corrected': True})
+        return GraphData(corrected, metadata={**sig.metadata, 'time_corrected': True})
     
     graph_implicit = Graph(optimize_metadata=True)
     result_implicit = (graph_implicit
@@ -148,20 +148,20 @@ def main():
     print("Metadata optimization works seamlessly with explicit branch/merge.")
     print()
     
-    def branch_a_operation(sig: SignalData) -> SignalData:
+    def branch_a_operation(sig: GraphData) -> GraphData:
         """Branch A: uses sample_rate."""
         sr = sig.metadata['sample_rate']
-        return SignalData(sig.data + sr, metadata=sig.metadata)
+        return GraphData(sig.data + sr, metadata=sig.metadata)
     
-    def branch_b_operation(sig: SignalData) -> SignalData:
+    def branch_b_operation(sig: GraphData) -> GraphData:
         """Branch B: uses center_frequency."""
         fc = sig.metadata['center_frequency']
-        return SignalData(sig.data * fc, metadata=sig.metadata)
+        return GraphData(sig.data * fc, metadata=sig.metadata)
     
     def merge_branches(signals):
         """Merge the two branches."""
         combined = signals[0].data + signals[1].data
-        return SignalData(combined, metadata=signals[0].metadata)
+        return GraphData(combined, metadata=signals[0].metadata)
     
     graph_combined = Graph(optimize_metadata=True)
     result_combined = (graph_combined
@@ -194,14 +194,14 @@ def main():
         'huge_reference_data': np.random.randn(2000, 2000),     # ~32 MB
     }
     
-    signal_large = SignalData(data=np.random.randn(1000), metadata=large_metadata)
+    signal_large = GraphData(data=np.random.randn(1000), metadata=large_metadata)
     
-    def simple_scale(sig: SignalData) -> SignalData:
+    def simple_scale(sig: GraphData) -> GraphData:
         """Only needs sample_rate - tiny subset of metadata."""
         sr = sig.metadata['sample_rate']
         new_metadata = sig.metadata.copy()
         new_metadata['scaled'] = True
-        return SignalData(sig.data * 0.5, metadata=new_metadata)
+        return GraphData(sig.data * 0.5, metadata=new_metadata)
     
     print(f"Input signal has ~42 MB of metadata")
     print(f"Operation only needs 1 field (8 bytes)")

@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 import tempfile
 import os
-from sigexec import Graph, SignalData
+from sigexec import Graph, GraphData
 from sigexec.blocks import LFMGenerator, StackPulses, RangeCompress, DopplerCompress
 from sigexec.diagnostics import plot_range_doppler_map
 
@@ -43,7 +43,7 @@ def create_dashboard() -> sd.Dashboard:
     code_example_1 = """
 from sigexec import Graph
 from sigexec.blocks import RangeCompress, DopplerCompress
-from sigexec.core.data import SignalData
+from sigexec.core.data import GraphData
 
 # Load or generate different signals
 signal_dataset_a = load_signal("dataset_a.bin")
@@ -110,14 +110,14 @@ for params, result in results:
     
     code_example_2 = """
 from sigexec import Graph
-from sigexec.core.data import SignalData
+from sigexec.core.data import GraphData
 import numpy as np
 
 # Create a loader factory - data is loaded only when the variant executes
 def make_loader(filename):
     def load(_):
         data = np.load(filename)  # Loaded on demand, not upfront
-        return SignalData(data, metadata={'sample_rate': 20e6})
+        return GraphData(data, metadata={'sample_rate': 20e6})
     return load
 
 # Process multiple files through the same graph
@@ -174,7 +174,7 @@ for params, result in results:
             metadata = {k.replace('metadata_', ''): v for k, v in npz.items() 
                        if k.startswith('metadata_')}
             metadata['sample_rate'] = float(npz['sample_rate'])
-            return SignalData(npz['data'], metadata=metadata)
+            return GraphData(npz['data'], metadata=metadata)
         return load
     
     # Build list of file paths and names
@@ -216,7 +216,7 @@ from sigexec import Graph
 def make_loader(filename):
     def load(_):
         data = np.load(filename)
-        return SignalData(data, metadata={'sample_rate': 20e6})
+        return GraphData(data, metadata={'sample_rate': 20e6})
     return load
 
 # 3 files × 2 range windows × 2 Doppler windows = 12 total combinations
@@ -275,7 +275,7 @@ for params, result in results:
             metadata = {k.replace('metadata_', ''): v for k, v in npz.items() 
                        if k.startswith('metadata_')}
             metadata['sample_rate'] = float(npz['sample_rate'])
-            return SignalData(npz['data'], metadata=metadata)
+            return GraphData(npz['data'], metadata=metadata)
         return load
     
     # Combine lazy loading with processing variants
@@ -334,7 +334,7 @@ for params, result in results:
         def load(_):
             # Load happens here, during execution
             data = load_from_somewhere(filename)
-            return SignalData(data, sample_rate=...)
+            return GraphData(data, sample_rate=...)
         return load
     
     results = Graph().variants(make_loader, file_list, names=...).add(...).run()
