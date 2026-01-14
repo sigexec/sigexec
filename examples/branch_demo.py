@@ -49,7 +49,7 @@ def demo_basic_branch():
         .branch(["path_a", "path_b"])
         .add(process_a, name="Process A", branch="path_a")
         .add(process_b, name="Process B", branch="path_b")
-        .merge(merge_branches))
+        .merge(merge_branches, branches=['path_a','path_b']))
     
     # Run and check results
     result = graph.run(GraphData())
@@ -106,7 +106,7 @@ def demo_merge_keep():
         .add(filter_a, branch="a")
         .add(filter_b, branch="b")
         .add(filter_c, branch="c")
-        .merge(average_merge))
+        .merge(average_merge, branches=['a','b','c']))
     
     result = graph.run(GraphData())
     
@@ -125,7 +125,7 @@ if __name__ == "__main__":
     print("=" * 70)
     print("- .branch([names]) creates isolated port namespaces")
     print("- .add(func, branch='name') adds operation to specific branch")
-    print("- .merge(merge_func) combines branches with custom logic")
+    print("- .merge(merge_func, branches=[...]) combines branches with custom logic (branches must be specified)")
     print("- merge_func receives Dict[branch_name, GraphData]")
     print("- merge_func must return a single GraphData")
     print()

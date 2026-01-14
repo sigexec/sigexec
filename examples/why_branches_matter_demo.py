@@ -91,7 +91,7 @@ def demo_with_branches_solution():
         .add(lowpass_filter, branch="lowpass")
         .add(highpass_filter, branch="highpass")
         .add(analyze, name="Analyze")  # Runs on both branches
-        .merge(merge_filters))  # Combine results
+        .merge(merge_filters, branches=['lowpass', 'highpass']))  # Combine results
     
     result = graph.run(GraphData(), verbose=True)
     
@@ -136,7 +136,7 @@ def create_dashboard() -> 'sd.Dashboard':
         .add(DopplerCompress(window='hann'), branch="hann")
         .add(DopplerCompress(window='hamming'), branch="hamming")
         .add(DopplerCompress(window='blackman'), branch="blackman")
-        .merge(lambda branches: GraphData()) )
+        .merge(lambda branches: GraphData(), branches=['hann','hamming','blackman']) )
 
     # Run graph to collect branch outputs individually
     # We will run the doppler steps individually to get branch pulse matrices
@@ -197,7 +197,7 @@ def create_dashboard() -> 'sd.Dashboard':
         .add(DopplerCompress(window='hann'), branch="hann")
         .add(DopplerCompress(window='hamming'), branch="hamming")
         .add(DopplerCompress(window='blackman'), branch="blackman")
-        .merge(merge_windows))
+        .merge(merge_windows, branches=['hann','hamming','blackman']))
     
     result = graph.run(GraphData())
     

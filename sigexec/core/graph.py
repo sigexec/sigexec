@@ -953,9 +953,11 @@ class Graph:
         return self
     
     def merge(
-        self, 
-        merge_func: Callable[[Dict[str, GraphData]], GraphData],
+        self,
+        merge_func: Optional[Callable[[Dict[str, GraphData]], GraphData]] = None,
         branches: Optional[List[str]] = None,
+        *,
+        combiner: Optional[Callable[[Dict[str, GraphData]], GraphData]] = None,
         name: Optional[str] = None
     ) -> 'Graph':
         """
@@ -966,10 +968,14 @@ class Graph:
         merge function MUST return a single GraphData object that combines
         the provided branch data.
 
+        Note: **You must explicitly specify which branches to merge** via the
+        `branches` parameter (e.g., `branches=['a','b']`). This avoids ambiguity
+        in complex pipelines and keeps merges explicit and auditable.
+
         Args:
             merge_func: Function that takes a BranchesView and returns a single
                         merged GraphData
-            branches: Optional list of branch names to merge. If None, merges all active branches.
+            branches: List of branch names to merge (required)
             name: Optional name for this merge operation
 
         Returns:
@@ -988,12 +994,26 @@ class Graph:
             ...     .branch(["a", "b"])
             ...     .add(process_a, branch="a")
             ...     .add(process_b, branch="b")
-            ...     .merge(avg_merge))
+            ...     .merge(avg_merge, branches=['a','b']))
         """
+        # Backwards compatibility: allow calling .merge([branches], combiner=fn)
+        # If the caller passed the branches list as the first argument, support it.
+        if isinstance(merge_func, (list, tuple)):
+            if combiner is None or not callable(combiner):
+                raise ValueError("If calling .merge with a branches list as first arg, provide a callable via 'combiner='.")
+            branches = list(merge_func)
+            merge_func = combiner
+
+        if branches is None:
+            raise ValueError("Merge must specify branch names via `branches=[...]` to avoid ambiguity")
+
+        if not callable(merge_func):
+            raise ValueError("merge function must be callable")
+
         self.operations.append({
             'type': 'merge',
             'func': merge_func,
-            'branches': branches,
+            'branches': list(branches),
             'name': name or f"Merge{len(self.operations)}"
         })
         return self

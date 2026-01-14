@@ -29,7 +29,7 @@ def test_merge_receives_ordered_view_by_index():
          .branch(['a', 'b'])
          .add(a_proc, branch='a')
          .add(b_proc, branch='b')
-         .merge(merge_fn))
+         .merge(merge_fn, branches=['a', 'b']))
 
     res = g.run(GraphData())
     assert isinstance(res.data, np.ndarray)
@@ -63,7 +63,7 @@ def test_merge_receives_ordered_view_by_name():
          .branch(['a', 'b'])
          .add(a_proc, branch='a')
          .add(b_proc, branch='b')
-         .merge(merge_fn))
+         .merge(merge_fn, branches=['a', 'b']))
 
     res = g.run(GraphData())
     assert isinstance(res.data, np.ndarray)

@@ -143,7 +143,7 @@ graph = (Graph("CompareWindows")
     .branch(['hann', 'hamming'])
     .add(DopplerCompress(window='hann'), branch='hann')
     .add(DopplerCompress(window='hamming'), branch='hamming')
-    .merge(compare_merge)
+    .merge(compare_merge, branches=['hann', 'hamming'])
 )
 
 result = graph.run(GraphData())
