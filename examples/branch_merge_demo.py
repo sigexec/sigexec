@@ -142,12 +142,12 @@ graph = (
         .add(amplify(2.0), name="amplify_low", branch="lowpass")
         .add(amplify(3.0), name="amplify_high", branch="highpass")
         .merge(
-            ["lowpass", "highpass"], 
-            combiner=lambda sigs: SignalData(
-                data=sigs[0].data + sigs[1].data,
-                metadata=sigs[0].metadata
+            lambda branches: SignalData(
+                data=branches['lowpass'].data + branches['highpass'].data,
+                metadata=branches['lowpass'].metadata
             ),
-            output_name="combined"
+            branches=["lowpass", "highpass"],
+            name="combined"
         )
     )
     
@@ -282,9 +282,11 @@ result = graph.run()
                 functions=[extract_amplitude, extract_phase])
         .add(smooth_amplitude, name="smooth_amp", branch="amplitude")
         .add(unwrap_phase, name="unwrap_phase", branch="phase")
-        .merge(["amplitude", "phase"], 
-               combiner=reconstruct_complex,
-               output_name="reconstructed")
+        .merge(
+            reconstruct_complex,
+            branches=["amplitude", "phase"],
+            name="reconstructed"
+        )
     )
     
     amp_phase_result = amp_phase_pipeline.run()
