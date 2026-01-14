@@ -102,7 +102,8 @@ class Graph:
         name: str = "Graph", 
         enable_cache: bool = True, 
         input_data: Optional[GraphData] = None,
-        optimize_ports: bool = False
+        optimize_ports: bool = False,
+        optimize_ports_strict: bool = False
     ):
         """
         Initialize a new graph.
@@ -123,6 +124,8 @@ class Graph:
         self._parent_pipeline: Optional['Graph'] = None
         self._input_data = input_data
         self._optimize_ports = optimize_ports
+        # If True, enforce that functions with a decorator only access declared ports
+        self._optimize_ports_strict = optimize_ports_strict
     
     def _get_cache_key(self, up_to_index: int) -> str:
         """
@@ -586,6 +589,25 @@ class Graph:
         optimized_input = self._optimize_ports_for_operation(
             signal_data, operation, verbose
         )
+
+        # If strict enforcement is enabled and the operation declared required ports,
+        # install an enforcing tracker so any access to undeclared keys raises.
+        if getattr(self, '_optimize_ports_strict', False):
+            required = getattr(operation, '_required_ports', None)
+            if required is not None:
+                # Replace ports dict with an enforcing tracker limited to required keys
+                from sigexec.core.port_optimizer import EnforcingPortAccessTracker
+                # Build base dict with metadata and data (if present)
+                base = optimized_input.metadata.copy()
+                data_val = optimized_input.ports.get('data') if hasattr(optimized_input, 'ports') else None
+                if data_val is not None:
+                    base['data'] = data_val
+                tracker = EnforcingPortAccessTracker(base, allowed=required | ({'data'} if data_val is not None else set()))
+                tracked_input = GraphData(data=data_val)
+                tracked_input.ports = tracker
+                optimized_input = tracked_input
+                if verbose:
+                    print(f"    Strict optimization: enforcing access to {required}")
         
         # Execute operation with optimized input
         result = operation(optimized_input)

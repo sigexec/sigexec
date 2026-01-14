@@ -63,11 +63,54 @@ class PortAccessTracker(MutableMapping):
         return self._base.values()
 
 
+class EnforcingPortAccessTracker(PortAccessTracker):
+    """Tracker that enforces an allowlist of keys and raises on disallowed reads.
+
+    This is used for strict-mode enforcement when a function declares required
+    ports via the decorator.
+    """
+    def __init__(self, base: Optional[Dict[str, Any]] = None, allowed: Optional[Set[str]] = None):
+        super().__init__(base)
+        self._allowed: Set[str] = set(allowed or [])
+
+    def __getitem__(self, key):
+        if key not in self._allowed:
+            raise ValueError(f"Accessed undeclared port '{key}'")
+        return super().__getitem__(key)
+
+    def get(self, key, default=None):
+        if key not in self._allowed:
+            raise ValueError(f"Accessed undeclared port '{key}'")
+        return super().get(key, default)
+
+
 class PortAnalyzer:
     """Analyzes operations to determine which ports fields they access."""
 
     @staticmethod
+    def requires_ports(*keys: str):
+        """Decorator to explicitly declare required port keys for an operation.
+
+        Usage:
+            @PortAnalyzer.requires_ports('a', 'b')
+            def op(g):
+                ...
+        """
+        def decorator(func: Callable):
+            setattr(func, '_required_ports', set(keys))
+            return func
+        return decorator
+
+    @staticmethod
     def analyze_operation_static(operation: Callable) -> Optional[Set[str]]:
+        """
+        Statically analyze an operation to determine ports access patterns.
+
+        This uses AST parsing to look for both attribute-style accesses (e.g.
+        `g.data`) and explicit ports dict access (e.g. `g.ports['meta']` or
+        `g.ports.get('meta')`). Returns None if analysis cannot determine the
+        fields (e.g., dynamic access).
+        """
         """
         Statically analyze an operation to determine ports access patterns.
 
@@ -177,15 +220,29 @@ class PortAnalyzer:
         """
         Determine which metadata (port) keys an operation accesses.
 
-        Tries static analysis first, falls back to runtime analysis if available.
+        Precedence:
+        1. If the operation has an explicit `_required_ports` attribute (the
+           decorator `@PortAnalyzer.requires_ports`), return that set.
+        2. Static AST analysis
+        3. Runtime instrumentation analysis
+
         Returns None if unknown (consumer should assume all keys are needed).
         """
-        static_keys = PortAnalyzer.analyze_operation_static(operation)
         op_name = getattr(operation, '__name__', str(operation))
+
+        # 1) Decorator precedence
+        required = getattr(operation, '_required_ports', None)
+        if required is not None:
+            logger.debug(f"PortAnalyzer: using decorator-declared keys {required} for {op_name}")
+            return set(required)
+
+        # 2) Static analysis
+        static_keys = PortAnalyzer.analyze_operation_static(operation)
         if static_keys is not None and len(static_keys) > 0:
             logger.debug(f"PortAnalyzer: static analysis determined keys {static_keys} for {op_name}")
             return static_keys
 
+        # 3) Runtime analysis fallback
         if sample_input is not None:
             runtime_keys = PortAnalyzer.analyze_operation_runtime(operation, sample_input)
             if len(runtime_keys) > 0:
