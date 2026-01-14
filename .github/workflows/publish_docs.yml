@@ -44,8 +44,8 @@ jobs:
       - name: Prepare gh-pages dir and copy built site
         if: steps.detect_docs.outputs.docs_exists == 'true'
         run: |
-          mkdir -p gh-pages/docs
-          cp -r docs/* gh-pages/docs/ || true
+          mkdir -p gh-pages
+          cp -r docs/* gh-pages/ || true
           touch gh-pages/.nojekyll
 
       - name: Deploy to GitHub Pages (peaceiris)
