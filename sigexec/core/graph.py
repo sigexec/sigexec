@@ -608,8 +608,10 @@ class Graph:
             op_type = op.get('type')
             
             if op_type == 'branch':
-                # Create new branches - each gets a copy of current data
+                # Create new branches - each gets a copy of current data or is created
+                # by a provided per-branch function.
                 branch_names = op['names']
+                functions = op.get('functions')
                 if verbose:
                     print(f"Creating branches: {branch_names}")
                 
@@ -618,8 +620,13 @@ class Graph:
                 
                 # Create isolated copies for each new branch
                 new_branches = {}
-                for name in branch_names:
-                    new_branches[name] = source_data.copy() if source_data else None
+                for idx, name in enumerate(branch_names):
+                    if functions and functions[idx] is not None:
+                        # Apply function to a copy of the source data
+                        src = source_data.copy() if source_data else None
+                        new_branches[name] = functions[idx](src)
+                    else:
+                        new_branches[name] = source_data.copy() if source_data else None
                 
                 # Replace active branches with new ones
                 active_branches = new_branches
@@ -774,6 +781,59 @@ class Graph:
             
             return current_data
 
+        # Handle variants: produce the cartesian product of all variant configs
+        from itertools import product as _product
+
+        variant_specs = [op.get('variant_spec') for op in self.operations if op.get('variant_spec')]
+        configs_list = [vs['configs'] for vs in variant_specs]
+        names_list = [vs['names'] for vs in variant_specs]
+
+        results = []
+
+        for combo in _product(*configs_list):
+            # Build params dict for this combo (variant names are available in names_list)
+            params = {'variant': [str(name) for name in combo]}
+
+            # Build expanded operation list for this combo
+            expanded_ops = []
+            variant_index = 0
+            for op in self.operations:
+                if op.get('variant_spec'):
+                    vs = op['variant_spec']
+                    config = combo[variant_index]
+                    func = vs['factory'](config)
+                    expanded_ops.append({
+                        'name': f"variant_{variant_index}",
+                        'func': func,
+                        'cacheable': op.get('cacheable', True)
+                    })
+                    variant_index += 1
+                else:
+                    expanded_ops.append(op)
+
+            # Execute expanded ops sequentially
+            current_data = data
+            if save_intermediate:
+                self._intermediate_results = []
+
+            for i, op in enumerate(expanded_ops):
+                if verbose:
+                    print(f"[variant] Executing: {op.get('name', i)}...")
+                current_data = self._execute_with_metadata_optimization(
+                    op['func'], current_data, verbose
+                )
+                if save_intermediate and current_data is not None:
+                    self._intermediate_results.append(current_data.copy())
+
+            # Call callback if present
+            if on_variant_complete:
+                on_variant_complete(params, current_data)
+
+            if return_results:
+                results.append(({'variant': [str(c) for c in combo]}, current_data))
+
+        return results
+
     
     def run_and_compare(
         self,
@@ -814,7 +874,7 @@ class Graph:
         """Return the number of operations in the graph."""
         return len(self.operations)
     
-    def branch(self, names: Union[str, List[str]]) -> 'Graph':
+    def branch(self, names: Union[str, List[str]], functions: Optional[List[Callable]] = None) -> 'Graph':
         """
         Create one or more branches with isolated port namespaces.
         
@@ -824,6 +884,8 @@ class Graph:
         
         Args:
             names: Branch name(s) - single string or list of strings
+            functions: Optional list of functions (one per branch) to generate branch data
+                from the source data. If provided, length must match `names`.
             
         Returns:
             Self for chaining
@@ -831,7 +893,7 @@ class Graph:
         Example:
             >>> graph = (Graph("Process")
             ...     .add(generate_data)
-            ...     .branch(["path1", "path2"])
+            ...     .branch(["path1", "path2"], functions=[f1, f2])
             ...     .add(process_a, branch="path1")
             ...     .add(process_b, branch="path2")
             ...     .merge())
@@ -839,9 +901,13 @@ class Graph:
         if isinstance(names, str):
             names = [names]
         
+        if functions is not None and len(functions) != len(names):
+            raise ValueError("'functions' length must match 'names' length")
+        
         self.operations.append({
             'type': 'branch',
-            'names': names
+            'names': names,
+            'functions': functions
         })
         return self
     
