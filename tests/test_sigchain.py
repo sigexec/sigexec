@@ -3,28 +3,28 @@ Simple tests to verify the signal processing chain implementation.
 """
 
 import numpy as np
-from sigexec import SignalData, Graph
+from sigexec import GraphData, Graph
 from sigexec.blocks import LFMGenerator, StackPulses, RangeCompress, DopplerCompress
 
 
-def test_signal_data():
-    """Test SignalData class."""
-    print("Testing SignalData...")
+def test_gdata():
+    """Test GraphData class."""
+    print("Testing GraphData...")
     
     # Create signal data
     data = np.random.randn(10, 20) + 1j * np.random.randn(10, 20)
-    sig = SignalData(data=data, metadata={'sample_rate': 1e6, 'test': True})
+    sig = GraphData(data=data, metadata={'sample_rate': 1e6, 'test': True})
     
     assert sig.shape == (10, 20), f"Expected shape (10, 20), got {sig.shape}"
     assert sig.dtype == complex, f"Expected complex dtype, got {sig.dtype}"
-    assert sig.metadata['test'] == True
+    assert sig.test == True
     
     # Test copy
     sig_copy = sig.copy()
     sig_copy.data[0, 0] = 999
     assert sig.data[0, 0] != 999, "Copy should be independent"
     
-    print("  ✓ SignalData tests passed")
+    print("  ✓ GraphData tests passed")
 
 
 def test_lfm_generator():
@@ -43,8 +43,8 @@ def test_lfm_generator():
     
     assert signal_out.shape[0] == 64, f"Expected 64 pulses, got {signal_out.shape[0]}"
     assert signal_out.dtype == np.complex128
-    assert 'reference_pulse' in signal_out.metadata
-    assert 'target_delay' in signal_out.metadata
+    assert signal_out.has_port('reference_pulse')
+    assert signal_out.has_port('target_delay')
     
     print("  ✓ LFMGenerator tests passed")
 
@@ -55,13 +55,13 @@ def test_stack_pulses():
     
     # Create test data
     data = np.random.randn(32, 50) + 1j * np.random.randn(32, 50)
-    sig = SignalData(data=data, metadata={'sample_rate': 1e6})
+    sig = GraphData(data=data, metadata={'sample_rate': 1e6})
     
     stacker = StackPulses()
     sig_out = stacker(sig)
     
     assert sig_out.shape == data.shape
-    assert sig_out.metadata['pulse_stacked'] == True
+    assert sig_out.pulse_stacked == True
     
     print("  ✓ StackPulses tests passed")
 
@@ -77,7 +77,7 @@ def test_range_compress():
     data = np.random.randn(num_pulses, num_samples) + 1j * np.random.randn(num_pulses, num_samples)
     reference_pulse = np.random.randn(pulse_length) + 1j * np.random.randn(pulse_length)
     
-    sig = SignalData(
+    sig = GraphData(
         data=data,
         metadata={
             'sample_rate': 1e6,
@@ -90,7 +90,7 @@ def test_range_compress():
     
     # Output should be same or larger due to oversample_factor
     assert sig_out.shape[0] == num_pulses
-    assert sig_out.metadata['range_compressed'] == True
+    assert sig_out.range_compressed == True
     
     print("  ✓ RangeCompress tests passed")
 
@@ -104,7 +104,7 @@ def test_doppler_compress():
     num_samples = 50
     data = np.random.randn(num_pulses, num_samples) + 1j * np.random.randn(num_pulses, num_samples)
     
-    sig = SignalData(
+    sig = GraphData(
         data=data,
         metadata={
             'sample_rate': 1e6,
@@ -116,8 +116,8 @@ def test_doppler_compress():
     sig_out = dc(sig)
     
     assert sig_out.shape[0] == num_pulses  # May be larger with oversample_factor
-    assert sig_out.metadata['doppler_compressed'] == True
-    assert 'doppler_frequencies' in sig_out.metadata
+    assert sig_out.doppler_compressed == True
+    assert sig_out.has_port('doppler_frequencies')
     
     print("  ✓ DopplerCompress tests passed")
 
@@ -135,7 +135,7 @@ def test_pipeline():
     )
     
     assert result.shape[0] == 32  # num_pulses (may be larger with oversample_factor)
-    assert result.metadata['range_doppler_map'] == True
+    assert result.range_doppler_map == True
     
     # Verify there's a peak (target detection)
     magnitude = np.abs(result.data)
@@ -170,7 +170,7 @@ def test_complete_pipeline():
     
     # Verify output
     assert sig.shape[0] == 32  # num_pulses
-    assert sig.metadata['range_doppler_map'] == True
+    assert sig.range_doppler_map == True
     
     # Verify there's a peak (target detection)
     magnitude = np.abs(sig.data)
@@ -188,7 +188,7 @@ def run_all_tests():
     print()
     
     try:
-        test_signal_data()
+        test_gdata()
         test_lfm_generator()
         test_stack_pulses()
         test_range_compress()

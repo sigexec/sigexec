@@ -5,10 +5,63 @@ This module provides a cleaner, more functional approach to building
 signal processing graphs using method chaining and lambda functions.
 """
 
-from typing import Callable, Optional, List, Any, Dict, Tuple, Union
+from typing import Callable, Optional, List, Any, Dict, Tuple, Union, Set, Iterable
+from collections import OrderedDict
+from collections.abc import ItemsView, KeysView, ValuesView, Iterator
 import hashlib
 import pickle
-from .data import SignalData
+import numpy as np
+from .data import GraphData
+from .port_optimizer import (
+    PortAnalyzer,
+    create_port_subset,
+    merge_port_subsets
+)
+
+
+class BranchesView:
+    """A small wrapper around an ordered mapping of branch-name -> GraphData.
+
+    Provides both mapping semantics (branches['name']) and sequence semantics
+    (branches[0]) so merge functions can treat branch inputs as an ordered set
+    without caring about names.
+    """
+    def __init__(self, ordered: "OrderedDict[str, GraphData]"):
+        self._od: "OrderedDict[str, GraphData]" = OrderedDict(ordered)
+        self._names: List[str] = list(self._od.keys())
+
+    def __getitem__(self, key: Union[int, str]) -> GraphData:
+        """Allow index (0-based) or name lookup."""
+        if isinstance(key, int):
+            return list(self._od.values())[key]
+        return self._od[key]
+
+    def __len__(self) -> int:
+        return len(self._od)
+
+    def __iter__(self) -> Iterator[GraphData]:
+        return iter(self._od.values())
+
+    def items(self) -> ItemsView:
+        return self._od.items()
+
+    def keys(self) -> KeysView:
+        return self._od.keys()
+
+    def values(self) -> ValuesView:
+        return self._od.values()
+
+    def names(self) -> List[str]:
+        return list(self._names)
+
+    def as_list(self) -> List[GraphData]:
+        return list(self._od.values())
+
+    def as_dict(self) -> Dict[str, GraphData]:
+        return dict(self._od)
+
+    def __repr__(self) -> str:
+        return f"BranchesView(names={self.names()})"
 
 
 class Graph:
@@ -18,7 +71,7 @@ class Graph:
     This class provides a cleaner, more DAG-like interface where you can:
     - Chain operations fluently
     - Use lambda functions for custom operations
-    - Modify a single SignalData object through the graph
+    - Modify a single GraphData object through the graph
     - Specify dependencies implicitly through chaining
     - Branch graphs with automatic memoization (shared stages run once)
     - Create variants with different configurations
@@ -39,9 +92,18 @@ class Graph:
     """
     
     # Class-level cache shared across all graph instances
-    _global_cache: Dict[str, SignalData] = {}
+    _global_cache: Dict[str, GraphData] = {}
     
-    def __init__(self, name: str = "Graph", enable_cache: bool = True, input_data: Optional[SignalData] = None):
+    # Class-level cache for metadata analysis results
+    _metadata_analysis_cache: Dict[int, Optional[Set[str]]] = {}
+    
+    def __init__(
+        self, 
+        name: str = "Graph", 
+        enable_cache: bool = True, 
+        input_data: Optional[GraphData] = None,
+        optimize_ports: bool = False
+    ):
         """
         Initialize a new graph.
         
@@ -49,17 +111,18 @@ class Graph:
             name: Optional name for the graph
             enable_cache: Whether to enable memoization (default: True)
             input_data: Optional initial data to process
+            optimize_ports: If True, analyzes operations to determine which metadata
+                             fields they use and creates optimized subsets. This enables
+                             implicit branching when operations use different metadata
+                             fields, improving memory efficiency (default: False)
         """
         self.name = name
         self.operations: List[Dict[str, Any]] = []
         self._enable_cache = enable_cache
-        self._intermediate_results: List[SignalData] = []
+        self._intermediate_results: List[GraphData] = []
         self._parent_pipeline: Optional['Graph'] = None
         self._input_data = input_data
-        
-        # DAG branching support
-        self._active_branches: List[str] = ['main']  # Currently active branch names
-        self._branch_data: Dict[str, int] = {}  # branch_name -> last operation index for that branch
+        self._optimize_ports = optimize_ports
     
     def _get_cache_key(self, up_to_index: int) -> str:
         """
@@ -83,18 +146,18 @@ class Graph:
         key = "->".join(ops_repr)
         return key
     
-    def input_data(self, data: SignalData) -> 'Graph':
+    def input_data(self, data: GraphData) -> 'Graph':
         """
         Set the input data for the graph.
         
         Args:
-            data: SignalData to process
+            data: GraphData to process
             
         Returns:
             Self for method chaining
             
         Example:
-            >>> my_data = SignalData(data_array, sample_rate=20e6)
+            >>> my_data = GraphData(data_array, sample_rate=20e6)
             >>> result = (Graph()
             ...     .input_data(my_data)
             ...     .add(RangeCompress())
@@ -107,7 +170,7 @@ class Graph:
     
     def input_variants(
         self,
-        signals: List[SignalData],
+        signals: List[GraphData],
         names: Optional[List[str]] = None
     ) -> 'Graph':
         """
@@ -117,7 +180,7 @@ class Graph:
         Each signal will be processed through the entire graph.
         
         Args:
-            signals: List of SignalData objects to process
+            signals: List of GraphData objects to process
             names: Optional names for each signal variant
             
         Returns:
@@ -135,14 +198,14 @@ class Graph:
             >>> # Returns list of (params, result) tuples, one for each input signal
         """
         # Create a factory that returns a function which ignores input and returns the specific signal
-        def signal_factory(sig: SignalData) -> Callable[[SignalData], SignalData]:
+        def signal_factory(sig: GraphData) -> Callable[[GraphData], GraphData]:
             return lambda _: sig
         
         return self.variant(signal_factory, signals, names=names)
     
     def add(
         self,
-        operation: Callable[[SignalData], SignalData],
+        operation: Callable[[GraphData], GraphData],
         name: Optional[str] = None,
         cacheable: bool = True,
         branch: Optional[str] = None
@@ -151,43 +214,35 @@ class Graph:
         Add an operation to the graph.
         
         Args:
-            operation: A function that takes SignalData and returns SignalData
+            operation: A function that takes GraphData and returns GraphData
             name: Optional name for this operation
             cacheable: Whether this operation's result can be cached
-            branch: Optional branch name to add this operation to (for DAG branching)
+            branch: Optional branch name to add this operation to. If specified,
+                   the operation only executes on that branch.
             
         Returns:
             Self for method chaining
         """
         op_name = name or f"Op{len(self.operations)}"
         
-        # Determine which branches this operation applies to
-        if branch is not None:
-            if branch not in self._active_branches:
-                raise ValueError(f"Branch '{branch}' is not active. Active branches: {self._active_branches}")
-            target_branches = [branch]
-        else:
-            # Apply to all currently active branches
-            target_branches = self._active_branches.copy()
-        
         self.operations.append({
             'name': op_name,
             'func': operation,
             'cacheable': cacheable,
-            'branches': target_branches
+            'branch': branch
         })
         return self
     
     def map(
         self,
-        func: Callable[[SignalData], SignalData],
+        func: Callable[[GraphData], GraphData],
         name: Optional[str] = None
     ) -> 'Graph':
         """
         Alias for add() with a more functional name.
         
         Args:
-            func: A function that takes SignalData and returns SignalData
+            func: A function that takes GraphData and returns GraphData
             name: Optional name for this operation
             
         Returns:
@@ -210,10 +265,10 @@ class Graph:
         Returns:
             Self for method chaining
         """
-        def wrapper(signal_data: SignalData) -> SignalData:
+        def wrapper(signal_data: GraphData) -> GraphData:
             transformed_data = data_transformer(signal_data.data)
             metadata = signal_data.metadata.copy()
-            return SignalData(
+            return GraphData(
                 data=transformed_data,
                 metadata=metadata
             )
@@ -222,7 +277,7 @@ class Graph:
     
     def tap(
         self,
-        callback: Callable[[SignalData], None],
+        callback: Callable[[GraphData], None],
         name: Optional[str] = None
     ) -> 'Graph':
         """
@@ -231,13 +286,13 @@ class Graph:
         Useful for debugging, logging, or visualization.
         
         Args:
-            callback: Function that receives SignalData but doesn't return anything
+            callback: Function that receives GraphData but doesn't return anything
             name: Optional name for this operation
             
         Returns:
             Self for method chaining
         """
-        def wrapper(signal_data: SignalData) -> SignalData:
+        def wrapper(signal_data: GraphData) -> GraphData:
             callback(signal_data)
             return signal_data
         
@@ -247,7 +302,7 @@ class Graph:
     def plot(
         self,
         page=None,
-        plotter: Optional[Callable[[SignalData], None]] = None,
+        plotter: Optional[Callable[[GraphData], None]] = None,
         plot_type: Optional[str] = None,
         title: str = "Plot",
         name: Optional[str] = None,
@@ -264,7 +319,7 @@ class Graph:
         
         Args:
             page: staticdash Page object to add plot to
-            plotter: Custom function that plots SignalData
+            plotter: Custom function that plots GraphData
             plot_type: Type of plot ('timeseries', 'pulse_matrix', 'range_profile', 
                       'range_doppler_map', 'spectrum')
             title: Plot title
@@ -297,7 +352,7 @@ class Graph:
             
             plot_func = plot_functions[plot_type]
             
-            def plotter_wrapper(signal_data: SignalData) -> None:
+            def plotter_wrapper(signal_data: GraphData) -> None:
                 plot_func(page, signal_data, title=title, **plot_kwargs)
             
             return self.tap(plotter_wrapper, name=name or f"plot_{plot_type}")
@@ -309,134 +364,12 @@ class Graph:
         else:
             raise ValueError("Must provide either (page and plot_type) or plotter function")
     
-    def branch_copy(self, name: Optional[str] = None) -> 'Graph':
-        """
-        Create a new graph branch from the current state (legacy copy method).
-        
-        The new branch shares the operation history and will use memoization
-        to avoid re-executing common stages.
-        
-        Args:
-            name: Optional name for the new branch
-            
-        Returns:
-            A new Graph that shares operation history with this one
-        """
-        new_pipeline = Graph(
-            name=name or f"{self.name}_branch",
-            enable_cache=self._enable_cache
-        )
-        # Copy operations (shared history)
-        new_pipeline.operations = self.operations.copy()
-        new_pipeline._parent_pipeline = self
-        return new_pipeline
     
-    def branch(
-        self,
-        labels: List[str],
-        functions: Optional[List[Callable[[SignalData], SignalData]]] = None
-    ) -> 'Graph':
-        """
-        Create named branches for DAG-style parallel execution.
-        
-        This splits the current execution path into multiple named branches.
-        
-        Args:
-            labels: List of names for the new branches
-            functions: Optional list of functions to apply to each branch. If None, 
-                      the signal is duplicated to all branches. If provided, each 
-                      function creates its own branch output (no duplication).
-            
-        Returns:
-            Self for method chaining
-            
-        Example:
-            >>> # Simple duplicate
-            >>> graph.add(preprocess).branch(["b1", "b2"])
-            >>> graph.add(process_a, branch="b1")
-            >>> graph.add(process_b, branch="b2")
-            >>> 
-            >>> # Apply different functions
-            >>> graph.branch(labels=["sig", "fc"], 
-            ...                 functions=[extract_signal, extract_center_freq])
-            >>> graph.merge(["sig", "fc"], combiner=frequency_shift)
-        """
-        if functions is not None and len(functions) != len(labels):
-            raise ValueError(f"Number of functions ({len(functions)}) must match number of labels ({len(labels)})")
-        
-        # Create branch operation
-        self.operations.append({
-            'name': f'branch_{"_".join(labels)}',
-            'func': None,
-            'cacheable': False,
-            'branch_spec': {
-                'type': 'split',
-                'labels': labels,
-                'functions': functions,
-                'source_branches': self._active_branches.copy()
-            }
-        })
-        
-        # Update active branches
-        self._active_branches = labels
-        
-        return self
     
-    def merge(
-        self,
-        branch_names: List[str],
-        combiner: Callable[[List[SignalData]], SignalData],
-        output_name: str = 'merged'
-    ) -> 'Graph':
-        """
-        Merge multiple branches back into a single branch.
-        
-        Args:
-            branch_names: List of branch names to merge (order matters for combiner input)
-            combiner: Function that takes List[SignalData] (one per branch in order) and 
-                     returns a single merged SignalData
-            output_name: Name for the merged output branch (default: 'merged')
-            
-        Returns:
-            Self for method chaining
-            
-        Example:
-            >>> def combine_sig_fc(signals):
-            ...     signal_data, fc_data = signals[0], signals[1]
-            ...     fc = fc_data.data[0]  # Extract scalar
-            ...     shifted = signal_data.data * np.exp(2j * np.pi * fc * t)
-            ...     return SignalData(shifted, sample_rate=signal_data.sample_rate)
-            >>> 
-            >>> graph.branch(["sig", "fc"])
-            >>> graph.add(process_signal, branch="sig")
-            >>> graph.add(extract_freq, branch="fc")
-            >>> graph.merge(["sig", "fc"], combiner=combine_sig_fc)
-        """
-        # Validate branches exist
-        for branch_name in branch_names:
-            if branch_name not in self._active_branches:
-                raise ValueError(f"Branch '{branch_name}' is not active. Active: {self._active_branches}")
-        
-        # Create merge operation
-        self.operations.append({
-            'name': f'merge_{"_".join(branch_names)}',
-            'func': combiner,
-            'cacheable': True,
-            'merge_spec': {
-                'type': 'merge',
-                'input_branches': branch_names,
-                'output_branch': output_name
-            }
-        })
-        
-        # Update active branches
-        self._active_branches = [output_name]
-        
-        return self
     
     def variant(
         self,
-        operation_factory: Callable[[Any], Callable[[SignalData], SignalData]],
+        operation_factory: Callable[[Any], Callable[[GraphData], GraphData]],
         configs: List[Any],
         names: Optional[List[str]] = None
     ) -> 'Graph':
@@ -488,12 +421,165 @@ class Graph:
     # Alias for more intuitive usage (plural form)
     variants = variant
     
-    def get_intermediate_results(self) -> List[SignalData]:
+    def _analyze_operation_metadata_usage(
+        self,
+        op_func: Callable,
+        sample_data: Optional[GraphData] = None
+    ) -> Optional[Set[str]]:
+        """
+        Analyze which metadata fields an operation uses.
+        
+        Uses caching to avoid redundant analysis.
+        
+        Args:
+            op_func: The operation function to analyze
+            sample_data: Optional sample data for runtime analysis
+            
+        Returns:
+            Set of metadata keys used, or None if cannot be determined
+        """
+        # Use function id as cache key
+        func_id = id(op_func)
+        
+        if func_id in Graph._metadata_analysis_cache:
+            return Graph._metadata_analysis_cache[func_id]
+        
+        # For runtime analysis, create a tiny sample to avoid expensive operations
+        if sample_data is not None:
+            # Create a minimal sample with same metadata but tiny data
+            tiny_sample = GraphData(
+                data=np.zeros((2, 2) if len(sample_data.shape) > 1 else 2),
+                metadata=sample_data.metadata.copy()
+            )
+            analysis_sample = tiny_sample
+        else:
+            analysis_sample = None
+        
+        # Perform analysis
+        result = PortAnalyzer.get_operation_metadata_keys(op_func, analysis_sample)
+        
+        # Cache result
+        Graph._metadata_analysis_cache[func_id] = result
+        
+        return result
+    
+    def _optimize_ports_for_operation(
+        self,
+        signal_data: GraphData,
+        op_func: Callable,
+        verbose: bool = False
+    ) -> GraphData:
+        """
+        Create an optimized version of GraphData with only the metadata fields
+        the operation needs.
+        
+        Args:
+            signal_data: The input GraphData
+            op_func: The operation function
+            verbose: Print optimization info
+            
+        Returns:
+            GraphData with optimized metadata (or original if optimization not possible)
+        """
+        if not self._optimize_ports:
+            return signal_data
+        
+        # Analyze what metadata keys this operation needs
+        needed_keys = self._analyze_operation_metadata_usage(op_func, signal_data)
+        
+        if needed_keys is None:
+            # Cannot determine - use full metadata
+            if verbose:
+                print(f"    Metadata optimization: Cannot determine, using full metadata")
+            return signal_data
+        
+        if len(needed_keys) == 0:
+            # Operation doesn't use metadata
+            if verbose:
+                print(f"    Metadata optimization: No metadata needed")
+            return GraphData(data=signal_data.data, metadata={})
+        
+        # Create subset
+        optimized_metadata = create_port_subset(signal_data.metadata, needed_keys)
+        
+        if verbose:
+            full_size = len(signal_data.metadata)
+            opt_size = len(optimized_metadata)
+            print(f"    Metadata optimization: {full_size} -> {opt_size} keys ({needed_keys})")
+        
+        return GraphData(data=signal_data.data, metadata=optimized_metadata)
+    
+    def _restore_full_metadata(
+        self,
+        result: GraphData,
+        original_metadata: Dict[str, Any]
+    ) -> GraphData:
+        """
+        Restore full metadata to result, merging with any new metadata from operation.
+        
+        Args:
+            result: The result GraphData (may have modified metadata)
+            original_metadata: The original full metadata
+            
+        Returns:
+            GraphData with merged metadata
+        """
+        if not self._optimize_ports:
+            return result
+        
+        # Merge: operation's output metadata takes precedence
+        merged_metadata = original_metadata.copy()
+        merged_metadata.update(result.metadata)
+        
+        return GraphData(data=result.data, metadata=merged_metadata)
+    
+    def _execute_with_metadata_optimization(
+        self,
+        operation: Callable[[GraphData], GraphData],
+        signal_data: GraphData,
+        verbose: bool = False
+    ) -> GraphData:
+        """
+        Execute an operation with metadata optimization if enabled.
+        
+        This wraps operation execution to:
+        1. Analyze which metadata fields the operation needs
+        2. Create an optimized input with only those fields
+        3. Execute the operation
+        4. Restore the full metadata to the result
+        
+        Args:
+            operation: The operation to execute
+            signal_data: The input GraphData
+            verbose: Print optimization info
+            
+        Returns:
+            Result GraphData with full metadata
+        """
+        if not self._optimize_ports:
+            # No optimization - execute directly
+            return operation(signal_data)
+        
+        # Save original metadata
+        original_metadata = signal_data.metadata.copy()
+        
+        # Create optimized input
+        optimized_input = self._optimize_ports_for_operation(
+            signal_data, operation, verbose
+        )
+        
+        # Execute operation with optimized input
+        result = operation(optimized_input)
+        
+        # Restore full metadata
+        return self._restore_full_metadata(result, original_metadata)
+    
+    def get_intermediate_results(self) -> List[GraphData]:
         """
         Get all intermediate results from the last run.
         
         Returns:
-            List of SignalData from each stage
+            List of GraphData from each stage
         """
         return self._intermediate_results.copy()
     
@@ -503,460 +589,166 @@ class Graph:
     
     clear_cache = classmethod(clear_cache)
     
-    def _run_dag(
+    def _run_with_branches(
         self,
-        initial_data: Optional[SignalData] = None,
-        verbose: bool = False,
-        save_intermediate: bool = False,
-        use_cache: Optional[bool] = None,
-        on_variant_complete: Optional[Callable[[Dict[str, List[str]], SignalData], None]] = None,
-        return_results: bool = True
-    ) -> Union[SignalData, List[Tuple[Dict[str, List[str]], SignalData]]]:
-        """
-        Execute graph with DAG branching and merging.
-        
-        Handles variant operations if present - returns list of (params, result) tuples.
-        
-        Args:
-            initial_data: Initial signal data
-            verbose: Print execution progress
-            save_intermediate: Save intermediate results
-            use_cache: Override cache setting
-            on_variant_complete: Callback after each variant completes
-            return_results: Whether to accumulate results in return list
-            
-        Returns:
-            Final SignalData result, or list of (params, result) tuples if variants exist
-        """
-        # Check if graph has any variant operations
-        variant_ops = [op for op in self.operations if op.get('variant_spec')]
-        
-        if not variant_ops:
-            # No variants - single DAG execution
-            return self._run_dag_single(initial_data, verbose, save_intermediate, use_cache)
-        
-        # Has variants - execute DAG for each variant combination
-        from itertools import product
-        
-        # Extract variant specifications
-        variant_specs = []
-        for op in variant_ops:
-            spec = op['variant_spec']
-            variant_specs.append((spec['factory'], spec['configs'], spec['names']))
-        
-        # Generate all combinations
-        all_configs = [spec[1] for spec in variant_specs]  # configs lists
-        all_names = [spec[2] for spec in variant_specs]    # names lists
-        factories = [spec[0] for spec in variant_specs]    # factories
-        
-        cache_enabled = use_cache if use_cache is not None else self._enable_cache
-        results = []
-        
-        for config_combo in product(*all_configs):
-            # Build params dict for this combination
-            variant_names = []
-            for i, (names, config) in enumerate(zip(all_names, config_combo)):
-                config_idx = next(idx for idx, c in enumerate(all_configs[i]) if c is config)
-                variant_names.append(names[config_idx])
-            
-            params = {"variant": variant_names}
-            
-            if verbose:
-                print(f"\n=== Executing variant combination: {params} ===")
-            
-            # Execute DAG for this variant combination
-            result = self._run_dag_with_variants(
-                initial_data, config_combo, factories, 
-                verbose, save_intermediate, cache_enabled
-            )
-            
-            # Call user callback if provided
-            if on_variant_complete:
-                on_variant_complete(params, result)
-            
-            # Only accumulate if requested
-            if return_results:
-                results.append((params, result))
-        
-        return results
-    
-    def _run_dag_with_variants(
-        self,
-        initial_data: Optional[SignalData],
-        variant_configs: tuple,
-        variant_factories: list,
+        initial_data: Optional[GraphData],
         verbose: bool,
-        save_intermediate: bool,
         cache_enabled: bool
-    ) -> SignalData:
-        """Execute DAG with specific variant configuration."""
-        data = initial_data if initial_data is not None else self._input_data
-        
-        if save_intermediate:
-            self._intermediate_results = []
-        
-        # Create variant key for cache differentiation
-        variant_key = "_".join(str(c) for c in variant_configs)
-        
-        # Track results for each branch
-        branch_results: Dict[str, SignalData] = {'main': data}
-        variant_idx = 0
-        
-        for i, op in enumerate(self.operations):
-            # Handle variant operation
-            if op.get('variant_spec'):
-                # Execute variant with specific config from combination
-                config = variant_configs[variant_idx]
-                factory = variant_factories[variant_idx]
-                operation = factory(config)
-                
-                # Apply to all active branches
-                for branch_name in list(branch_results.keys()):
-                    current_data = branch_results[branch_name]
-                    
-                    # Create cache key including variant config
-                    input_hash = hash(current_data.data.tobytes() if current_data is not None else "none")
-                    try:
-                        config_hash = hash(str(config))
-                    except:
-                        config_hash = id(config)
-                    
-                    cache_key = f"{self._get_cache_key(i)}_variant{variant_idx}_{config_hash}_{input_hash}_branch_{branch_name}"
-                    
-                    if cache_enabled and cache_key in Graph._global_cache:
-                        if verbose:
-                            print(f"  [CACHED] variant{variant_idx+1}={config} [branch: {branch_name}]")
-                        branch_results[branch_name] = Graph._global_cache[cache_key]
-                    else:
-                        if verbose:
-                            print(f"  Executing: variant{variant_idx+1}={config} [branch: {branch_name}]")
-                        branch_results[branch_name] = operation(current_data)
-                        if cache_enabled:
-                            Graph._global_cache[cache_key] = branch_results[branch_name]
-                
-                variant_idx += 1
-                continue
-            
-            # Handle branch split
-            if op.get('branch_spec'):
-                branch_spec = op['branch_spec']
-                labels = branch_spec['labels']
-                functions = branch_spec.get('functions')
-                source_branches = branch_spec['source_branches']
-                
-                if verbose:
-                    print(f"  Branching into: {labels}")
-                
-                if functions is None:
-                    # Duplicate mode: copy data to all new branches
-                    for source_branch in source_branches:
-                        source_data = branch_results.get(source_branch)
-                        if source_data is not None:
-                            for label in labels:
-                                branch_results[label] = source_data.copy()
-                                if verbose:
-                                    print(f"    Branch '{label}': duplicated from '{source_branch}'")
-                else:
-                    # Function mode: apply each function to create branch output
-                    for source_branch in source_branches:
-                        source_data = branch_results.get(source_branch)
-                        if source_data is not None:
-                            for label, func in zip(labels, functions):
-                                cache_key = f"{self._get_cache_key(i)}_variant_{variant_key}_branch_{label}"
-                                
-                                if cache_enabled and cache_key in Graph._global_cache:
-                                    if verbose:
-                                        print(f"    [CACHED] Branch '{label}'")
-                                    branch_results[label] = Graph._global_cache[cache_key]
-                                else:
-                                    if verbose:
-                                        print(f"    Executing branch '{label}' function")
-                                    branch_results[label] = func(source_data)
-                                    if cache_enabled:
-                                        Graph._global_cache[cache_key] = branch_results[label]
-                
-                continue
-            
-            # Handle merge
-            if op.get('merge_spec'):
-                merge_spec = op['merge_spec']
-                input_branches = merge_spec['input_branches']
-                output_branch = merge_spec['output_branch']
-                combiner = op['func']
-                
-                if verbose:
-                    print(f"  Merging {input_branches} -> '{output_branch}'")
-                
-                # Collect inputs in order
-                merge_inputs = []
-                for branch_name in input_branches:
-                    if branch_name not in branch_results:
-                        raise RuntimeError(f"Branch '{branch_name}' has no data for merge")
-                    merge_inputs.append(branch_results[branch_name])
-                
-                # Execute combiner
-                cache_key = f"{self._get_cache_key(i)}_variant_{variant_key}_merge_{'_'.join(input_branches)}"
-                
-                if cache_enabled and op.get('cacheable', True) and cache_key in Graph._global_cache:
-                    if verbose:
-                        print(f"    [CACHED] {op['name']}")
-                    merged_data = Graph._global_cache[cache_key]
-                else:
-                    if verbose:
-                        print(f"    Executing: {op['name']}")
-                    merged_data = combiner(merge_inputs)
-                    
-                    if cache_enabled and op.get('cacheable', True):
-                        Graph._global_cache[cache_key] = merged_data
-                
-                branch_results[output_branch] = merged_data
-                
-                if save_intermediate:
-                    self._intermediate_results.append(merged_data.copy())
-                
-                continue
-            
-            # Handle normal operation
-            target_branches = op.get('branches', ['main'])
-            
-            for branch_name in target_branches:
-                if branch_name not in branch_results:
-                    if verbose:
-                        print(f"    Skipping {op['name']} - branch '{branch_name}' inactive")
-                    continue
-                
-                current_data = branch_results[branch_name]
-                cache_key = f"{self._get_cache_key(i)}_variant_{variant_key}_branch_{branch_name}"
-                
-                if cache_enabled and op.get('cacheable', True) and cache_key in Graph._global_cache:
-                    if verbose:
-                        print(f"    [CACHED] {op['name']} [branch: {branch_name}]")
-                    result_data = Graph._global_cache[cache_key]
-                else:
-                    if verbose:
-                        print(f"    Executing: {op['name']} [branch: {branch_name}]")
-                    result_data = op['func'](current_data)
-                    
-                    if cache_enabled and op.get('cacheable', True):
-                        Graph._global_cache[cache_key] = result_data
-                
-                branch_results[branch_name] = result_data
-                
-                if save_intermediate:
-                    self._intermediate_results.append(result_data.copy())
-        
-        # Return result from the active branch
-        active_branch = self._active_branches[0] if self._active_branches else 'main'
-        if active_branch not in branch_results:
-            raise RuntimeError(f"No result found for active branch '{active_branch}'")
-        
-        if verbose:
-            print(f"  Graph complete. Result from branch: {active_branch}")
-        
-        return branch_results[active_branch]
-    
-    def _run_dag_single(
-        self,
-        initial_data: Optional[SignalData] = None,
-        verbose: bool = False,
-        save_intermediate: bool = False,
-        use_cache: Optional[bool] = None
-    ) -> SignalData:
+    ) -> Dict[str, GraphData]:
         """
-        Execute DAG graph without variants (single execution).
+        Execute graph with branch support, returning results for each branch.
         
-        Args:
-            initial_data: Initial signal data
-            verbose: Print execution progress
-            save_intermediate: Save intermediate results
-            use_cache: Override cache setting
-            
         Returns:
-            Final SignalData result
+            Dict mapping branch names to their GraphData results
         """
-        data = initial_data if initial_data is not None else self._input_data
-        cache_enabled = use_cache if use_cache is not None else self._enable_cache
-        
-        if save_intermediate:
-            self._intermediate_results = []
-        
-        # Track results for each branch
-        branch_results: Dict[str, SignalData] = {'main': data}
-        
-        if verbose:
-            print(f"Running DAG graph: {self.name}")
+        # Track active branches - starts with "main" branch
+        active_branches = {"main": initial_data}
         
         for i, op in enumerate(self.operations):
-            # Handle branch split
-            if op.get('branch_spec'):
-                branch_spec = op['branch_spec']
-                labels = branch_spec['labels']
-                functions = branch_spec.get('functions')
-                source_branches = branch_spec['source_branches']
+            op_type = op.get('type')
+            
+            if op_type == 'branch':
+                # Create new branches - each gets a copy of current data
+                branch_names = op['names']
+                if verbose:
+                    print(f"Creating branches: {branch_names}")
+                
+                # Get the current data from main branch (or first active branch)
+                source_data = next(iter(active_branches.values()))
+                
+                # Create isolated copies for each new branch
+                new_branches = {}
+                for name in branch_names:
+                    new_branches[name] = source_data.copy() if source_data else None
+                
+                # Replace active branches with new ones
+                active_branches = new_branches
+                
+            elif op_type == 'merge':
+                # Merge branches using merge function
+                merge_func = op.get('func')
+                target_branches = op.get('branches')
+                
+                # Determine which branches to merge
+                if target_branches:
+                    branches_to_merge = {
+                        k: v for k, v in active_branches.items()
+                        if k in target_branches
+                    }
+                else:
+                    branches_to_merge = active_branches
                 
                 if verbose:
-                    print(f"\nBranching into: {labels}")
+                    print(f"Merging branches {list(branches_to_merge.keys())} with {op.get('name')}")
                 
-                if functions is None:
-                    # Duplicate mode: copy data to all new branches
-                    for source_branch in source_branches:
-                        source_data = branch_results.get(source_branch)
-                        if source_data is not None:
-                            for label in labels:
-                                branch_results[label] = source_data.copy()
-                                if verbose:
-                                    print(f"  Branch '{label}': duplicated from '{source_branch}'")
+                # Call merge function with a BranchesView (ordered) so the
+                # user can index by name (branches['x']) or by position (branches[0]).
+                bv = BranchesView(OrderedDict(branches_to_merge))
+                merged_data = merge_func(bv)
+
+                # Replace all branches with single "main" branch containing merged result
+                active_branches = {"main": merged_data}
+                
+            else:
+                # Regular operation
+                func = op.get('func')
+                target_branch = op.get('branch')
+                
+                if target_branch:
+                    # Execute only on specific branch
+                    if target_branch in active_branches:
+                        if verbose:
+                            print(f"Executing {op['name']} on branch '{target_branch}'")
+                        
+                        cache_key = f"{self._get_cache_key(i)}_{target_branch}"
+                        
+                        if cache_enabled and op.get('cacheable', True) and cache_key in Graph._global_cache:
+                            if verbose:
+                                print(f"  [CACHED]")
+                            active_branches[target_branch] = Graph._global_cache[cache_key]
+                        else:
+                            active_branches[target_branch] = self._execute_with_metadata_optimization(
+                                func, active_branches[target_branch], verbose
+                            )
+                            if cache_enabled and op.get('cacheable', True):
+                                Graph._global_cache[cache_key] = active_branches[target_branch]
                 else:
-                    # Function mode: apply each function to create branch output
-                    for source_branch in source_branches:
-                        source_data = branch_results.get(source_branch)
-                        if source_data is not None:
-                            for label, func in zip(labels, functions):
-                                cache_key = f"{self._get_cache_key(i)}_branch_{label}"
-                                
-                                if cache_enabled and cache_key in Graph._global_cache:
-                                    if verbose:
-                                        print(f"  [CACHED] Branch '{label}'")
-                                    branch_results[label] = Graph._global_cache[cache_key]
-                                else:
-                                    if verbose:
-                                        print(f"  Executing branch '{label}' function")
-                                    branch_results[label] = func(source_data)
-                                    if cache_enabled:
-                                        Graph._global_cache[cache_key] = branch_results[label]
-                
-                continue
-            
-            # Handle merge
-            if op.get('merge_spec'):
-                merge_spec = op['merge_spec']
-                input_branches = merge_spec['input_branches']
-                output_branch = merge_spec['output_branch']
-                combiner = op['func']
-                
-                if verbose:
-                    print(f"\nMerging {input_branches} -> '{output_branch}'")
-                
-                # Collect inputs in order
-                merge_inputs = []
-                for branch_name in input_branches:
-                    if branch_name not in branch_results:
-                        raise RuntimeError(f"Branch '{branch_name}' has no data for merge")
-                    merge_inputs.append(branch_results[branch_name])
-                
-                # Execute combiner
-                cache_key = f"{self._get_cache_key(i)}_merge_{'_'.join(input_branches)}"
-                
-                if cache_enabled and op.get('cacheable', True) and cache_key in Graph._global_cache:
+                    # Execute on all active branches
                     if verbose:
-                        print(f"  [CACHED] {op['name']}")
-                    merged_data = Graph._global_cache[cache_key]
-                else:
-                    if verbose:
-                        print(f"  Executing: {op['name']}")
-                    merged_data = combiner(merge_inputs)
+                        print(f"Executing {op['name']} on all branches: {list(active_branches.keys())}")
                     
-                    if cache_enabled and op.get('cacheable', True):
-                        Graph._global_cache[cache_key] = merged_data
-                
-                branch_results[output_branch] = merged_data
-                
-                if save_intermediate:
-                    self._intermediate_results.append(merged_data.copy())
-                
-                continue
-            
-            # Handle normal operation
-            target_branches = op.get('branches', ['main'])
-            
-            for branch_name in target_branches:
-                if branch_name not in branch_results:
-                    if verbose:
-                        print(f"  Skipping {op['name']} - branch '{branch_name}' inactive")
-                    continue
-                
-                current_data = branch_results[branch_name]
-                cache_key = f"{self._get_cache_key(i)}_branch_{branch_name}"
-                
-                if cache_enabled and op.get('cacheable', True) and cache_key in Graph._global_cache:
-                    if verbose:
-                        print(f"  [CACHED] {op['name']} [branch: {branch_name}]")
-                    result_data = Graph._global_cache[cache_key]
-                else:
-                    if verbose:
-                        print(f"  Executing: {op['name']} [branch: {branch_name}]")
-                    result_data = op['func'](current_data)
-                    
-                    if cache_enabled and op.get('cacheable', True):
-                        Graph._global_cache[cache_key] = result_data
-                
-                branch_results[branch_name] = result_data
-                
-                if save_intermediate:
-                    self._intermediate_results.append(result_data.copy())
+                    for branch_name in list(active_branches.keys()):
+                        cache_key = f"{self._get_cache_key(i)}_{branch_name}"
+                        
+                        if cache_enabled and op.get('cacheable', True) and cache_key in Graph._global_cache:
+                            if verbose:
+                                print(f"  [{branch_name}: CACHED]")
+                            active_branches[branch_name] = Graph._global_cache[cache_key]
+                        else:
+                            active_branches[branch_name] = self._execute_with_metadata_optimization(
+                                func, active_branches[branch_name], verbose
+                            )
+                            if cache_enabled and op.get('cacheable', True):
+                                Graph._global_cache[cache_key] = active_branches[branch_name]
         
-        # Return result from the active branch
-        active_branch = self._active_branches[0] if self._active_branches else 'main'
-        if active_branch not in branch_results:
-            raise RuntimeError(f"No result found for active branch '{active_branch}'")
-        
-        if verbose:
-            print(f"\nPipeline complete. Result from branch: {active_branch}")
-        
-        return branch_results[active_branch]
-    
+        return active_branches
+
+
+
     def run(
         self,
-        initial_data: Optional[SignalData] = None,
+        initial_data: Optional[GraphData] = None,
         verbose: bool = False,
         save_intermediate: bool = False,
         use_cache: Optional[bool] = None,
-        on_variant_complete: Optional[Callable[[Dict[str, List[str]], SignalData], None]] = None,
+        on_variant_complete: Optional[Callable[[Dict[str, List[str]], GraphData], None]] = None,
         return_results: bool = True
-    ) -> Union[SignalData, List[Tuple[Dict[str, List[str]], SignalData]]]:
+    ) -> Union[GraphData, List[Tuple[Dict[str, List[str]], GraphData]], Dict[str, GraphData]]:
         """
-        Execute the graph with memoization.
+        Execute the graph with memoization and branch support.
         
-        If this graph shares operations with a previously executed graph,
-        cached results will be reused.
-        
-        If variants have been added via .variant(), returns a list of 
-        (params_dict, result) tuples with all combinations explored. 
-        Otherwise returns a single SignalData result.
+        Returns:
+        - Single GraphData if no branches or variants
+        - Dict[str, GraphData] if branches exist (maps branch names to results)
+        - List of (params, result) tuples if variants exist
         
         Args:
             initial_data: Initial signal data (can be None for generators)
             verbose: Print execution progress
             save_intermediate: Save intermediate results for inspection
-            use_cache: Override cache setting for this run (default: use instance setting)
-            on_variant_complete: Callback called after each variant completes.
-                                Receives (params_dict, result). Useful for saving
-                                results incrementally to avoid memory buildup.
-            return_results: If False with variants, returns empty list instead of
-                          accumulating all results. Use with on_variant_complete
-                          for memory-efficient processing.
+            use_cache: Override cache setting for this run
+            on_variant_complete: Callback for variant completion
+            return_results: Whether to accumulate results
             
         Returns:
-            SignalData if no variants, or List of (params, result) tuples if variants exist.
-            When variants are present, params is a dict with:
-                params['variant']: List of variant names, e.g. ['Hamming', 'Hann']
+            GraphData, Dict[branch -> GraphData], or List of variant results
         """
-        # Check if graph uses DAG branching/merging
-        has_dag = any(op.get('branch_spec') or op.get('merge_spec') for op in self.operations)
-        if has_dag:
-            return self._run_dag(initial_data, verbose, save_intermediate, use_cache, 
-                                on_variant_complete, return_results)
+        data = initial_data if initial_data is not None else self._input_data
+        cache_enabled = use_cache if use_cache is not None else self._enable_cache
         
-        # Check if graph has any variant operations
+        # Check if graph has branches or variants
+        has_branches = any(op.get('type') in ('branch', 'merge') for op in self.operations)
+        has_variants = any(op.get('variant_spec') for op in self.operations)
+        
+        if has_branches and has_variants:
+            raise NotImplementedError("Branches and variants together not yet supported. Use one or the other.")
+        
+        if has_branches:
+            # Execute with branch support
+            branch_results = self._run_with_branches(data, verbose, cache_enabled)
+            
+            # If only one branch remains, return its data directly
+            if len(branch_results) == 1:
+                return next(iter(branch_results.values()))
+            
+            return branch_results
+        
+        # No branches - check for variants
         variant_ops = [op for op in self.operations if op.get('variant_spec')]
         
-        # Use provided initial_data, or fall back to self._input_data
-        data = initial_data if initial_data is not None else self._input_data
-        
         if not variant_ops:
-            # No variants - normal execution
+            # Simple sequential execution
             current_data = data
-            cache_enabled = use_cache if use_cache is not None else self._enable_cache
             
             if save_intermediate:
                 self._intermediate_results = []
@@ -964,169 +756,30 @@ class Graph:
             for i, op in enumerate(self.operations):
                 cache_key = self._get_cache_key(i)
                 
-                # Check cache if enabled and operation is cacheable
                 if cache_enabled and op.get('cacheable', True) and cache_key in Graph._global_cache:
                     if verbose:
                         print(f"[CACHED] {op['name']}...")
                     current_data = Graph._global_cache[cache_key]
                 else:
-                    # Execute operation
                     if verbose:
-                        cache_status = "" if cache_enabled else "[NO CACHE]"
-                        print(f"Executing: {op['name']}... {cache_status}")
-                    
-                    current_data = op['func'](current_data)
-                    
-                    # Cache result if enabled and cacheable
+                        print(f"Executing: {op['name']}...")
+                    current_data = self._execute_with_metadata_optimization(
+                        op['func'], current_data, verbose
+                    )
                     if cache_enabled and op.get('cacheable', True):
                         Graph._global_cache[cache_key] = current_data
                 
                 if save_intermediate and current_data is not None:
                     self._intermediate_results.append(current_data.copy())
-                
-                if verbose and current_data is not None:
-                    print(f"  Output shape: {current_data.shape}")
             
             return current_data
-        
-        # Has variants - explore all combinations
-        from itertools import product
-        
-        # Split operations into segments: normal ops before/between/after variants
-        segments = []
-        current_segment = []
-        
-        for op in self.operations:
-            if op.get('variant_spec'):
-                if current_segment:
-                    segments.append(('normal', current_segment))
-                segments.append(('variant', op['variant_spec']))
-                current_segment = []
-            else:
-                current_segment.append(op)
-        
-        if current_segment:
-            segments.append(('normal', current_segment))
-        
-        # Extract all variant specs
-        variant_specs = [(s[1]['factory'], s[1]['configs'], s[1]['names']) 
-                        for s in segments if s[0] == 'variant']
-        
-        # Generate all combinations
-        all_configs = [spec[1] for spec in variant_specs]  # configs lists
-        all_names = [spec[2] for spec in variant_specs]    # names lists
-        factories = [spec[0] for spec in variant_specs]    # factories
-        
-        cache_enabled = use_cache if use_cache is not None else self._enable_cache
-        results = []
-        
-        for config_combo in product(*all_configs):
-            # Build params dict for this combination
-            # Use a list structure: params["variant"] = [name1, name2, ...]
-            variant_names = []
-            for i, (names, config) in enumerate(zip(all_names, config_combo)):
-                # Use identity comparison for objects that might not support == properly
-                config_idx = next(idx for idx, c in enumerate(all_configs[i]) if c is config)
-                variant_names.append(names[config_idx])
-            
-            params = {"variant": variant_names}
-            
-            if verbose:
-                print(f"\nExecuting combination: {params}")
-            
-            # Execute graph for this combination
-            current_data = data
-            variant_idx = 0
-            op_global_idx = 0
-            
-            # Track if we've executed any variant operations yet
-            # Operations before the first variant can be shared across all combinations
-            executed_variant = False
-            
-            for seg_type, seg_data in segments:
-                if seg_type == 'normal':
-                    # Execute normal operations
-                    for op in seg_data:
-                        base_cache_key = self._get_cache_key(op_global_idx)
-                        
-                        # Only add combo-specific suffix AFTER first variant
-                        # This allows early stages to be shared across all variants
-                        if executed_variant:
-                            # After variants: include input data hash to ensure correct results
-                            input_hash = hash(current_data.data.tobytes() if current_data is not None else "none")
-                            cache_key = f"{base_cache_key}_{input_hash}"
-                        else:
-                            # Before any variants: use simple key that's shared across all combos
-                            cache_key = base_cache_key
-                        
-                        if cache_enabled and op.get('cacheable', True) and cache_key in Graph._global_cache:
-                            if verbose:
-                                print(f"[CACHED] {op['name']}...")
-                            current_data = Graph._global_cache[cache_key]
-                        else:
-                            if verbose:
-                                print(f"Executing: {op['name']}...")
-                            current_data = op['func'](current_data)
-                            if cache_enabled and op.get('cacheable', True):
-                                Graph._global_cache[cache_key] = current_data
-                        
-                        op_global_idx += 1
-                
-                elif seg_type == 'variant':
-                    # Mark that we've executed a variant - operations after this need unique keys
-                    executed_variant = True
-                    
-                    # Execute variant operation with specific config
-                    config = config_combo[variant_idx]
-                    factory = factories[variant_idx]
-                    operation = factory(config)
-                    
-                    # Create cache key including the variant config AND input data
-                    # This ensures different combinations don't incorrectly reuse cached results
-                    input_hash = hash(current_data.data.tobytes() if current_data is not None else "none")
-                    
-                    # For config hash, use id() if it's a complex object like SignalData
-                    try:
-                        config_hash = hash(str(config))
-                    except:
-                        config_hash = id(config)
-                    
-                    cache_key_parts = [
-                        str(self._get_cache_key(op_global_idx)),
-                        str(config_hash),
-                        str(input_hash)
-                    ]
-                    cache_key = '_'.join(cache_key_parts)
-                    
-                    if cache_enabled and cache_key in Graph._global_cache:
-                        if verbose:
-                            print(f"[CACHED] variant{variant_idx+1}={config}...")
-                        current_data = Graph._global_cache[cache_key]
-                    else:
-                        if verbose:
-                            print(f"Executing: variant{variant_idx+1}={config}...")
-                        current_data = operation(current_data)
-                        if cache_enabled:
-                            Graph._global_cache[cache_key] = current_data
-                    
-                    variant_idx += 1
-                    op_global_idx += 1
-            
-            # Call user callback if provided (for incremental saving, etc.)
-            if on_variant_complete:
-                on_variant_complete(params, current_data)
-            
-            # Only accumulate if requested
-            if return_results:
-                results.append((params, current_data))
-        
-        return results
+
     
     def run_and_compare(
         self,
-        initial_data: Optional[SignalData] = None,
-        comparison_func: Optional[Callable[[List[SignalData]], Any]] = None
-    ) -> Tuple[SignalData, List[SignalData]]:
+        initial_data: Optional[GraphData] = None,
+        comparison_func: Optional[Callable[[List[GraphData]], Any]] = None
+    ) -> Tuple[GraphData, List[GraphData]]:
         """
         Run graph with intermediate results and optionally compare them.
         
@@ -1145,7 +798,7 @@ class Graph:
         
         return result, intermediates
     
-    def __call__(self, initial_data: Optional[SignalData] = None) -> SignalData:
+    def __call__(self, initial_data: Optional[GraphData] = None) -> GraphData:
         """
         Make the graph callable.
         
@@ -1153,7 +806,7 @@ class Graph:
             initial_data: Initial signal data
             
         Returns:
-            Final processed SignalData
+            Final processed GraphData
         """
         return self.run(initial_data)
     
@@ -1161,14 +814,99 @@ class Graph:
         """Return the number of operations in the graph."""
         return len(self.operations)
     
+    def branch(self, names: Union[str, List[str]]) -> 'Graph':
+        """
+        Create one or more branches with isolated port namespaces.
+        
+        Branches allow parallel execution paths where each path has its own
+        isolated port namespace. This prevents port name collisions and allows
+        blocks to be written without knowledge of the graph context.
+        
+        Args:
+            names: Branch name(s) - single string or list of strings
+            
+        Returns:
+            Self for chaining
+            
+        Example:
+            >>> graph = (Graph("Process")
+            ...     .add(generate_data)
+            ...     .branch(["path1", "path2"])
+            ...     .add(process_a, branch="path1")
+            ...     .add(process_b, branch="path2")
+            ...     .merge())
+        """
+        if isinstance(names, str):
+            names = [names]
+        
+        self.operations.append({
+            'type': 'branch',
+            'names': names
+        })
+        return self
+    
+    def merge(
+        self, 
+        merge_func: Callable[[Dict[str, GraphData]], GraphData],
+        branches: Optional[List[str]] = None,
+        name: Optional[str] = None
+    ) -> 'Graph':
+        """
+        Merge multiple branches by combining their data.
+
+        The merge function receives a BranchesView object which supports both
+        mapping (branches['name']) and sequence (branches[0]) access. The
+        merge function MUST return a single GraphData object that combines
+        the provided branch data.
+
+        Args:
+            merge_func: Function that takes a BranchesView and returns a single
+                        merged GraphData
+            branches: Optional list of branch names to merge. If None, merges all active branches.
+            name: Optional name for this merge operation
+
+        Returns:
+            Self for chaining
+
+        Example:
+            >>> def avg_merge(branches):
+            ...     # branches can be indexed by name or position
+            ...     arr0 = branches['a'].data
+            ...     arr1 = branches[1].data
+            ...     result = GraphData()
+            ...     result.data = np.mean([arr0, arr1], axis=0)
+            ...     return result
+            >>>
+            >>> graph = (Graph("Process")
+            ...     .branch(["a", "b"])
+            ...     .add(process_a, branch="a")
+            ...     .add(process_b, branch="b")
+            ...     .merge(avg_merge))
+        """
+        self.operations.append({
+            'type': 'merge',
+            'func': merge_func,
+            'branches': branches,
+            'name': name or f"Merge{len(self.operations)}"
+        })
+        return self
+    
     def __repr__(self) -> str:
         """Return string representation of the graph."""
-        op_names = [op['name'] for op in self.operations]
+        num_ops = len(self.operations)
+        variant_ops = sum(1 for op in self.operations if op.get('variant_spec'))
         cache_status = " [cached]" if self._enable_cache else ""
-        return f"Graph('{self.name}'{cache_status}, ops={' -> '.join(op_names)})"
+        if variant_ops > 0:
+            return f"Graph('{self.name}'{cache_status}, ops={num_ops}, variants={variant_ops})"
+        return f"Graph('{self.name}'{cache_status}, ops={num_ops})"
 
 
-def create_graph(name: str = "Graph", enable_cache: bool = True, input_data: Optional[SignalData] = None) -> Graph:
+def create_graph(
+    name: str = "Graph", 
+    enable_cache: bool = True, 
+    input_data: Optional[GraphData] = None,
+    optimize_ports: bool = False
+) -> Graph:
     """
     Factory function to create a new graph.
     
@@ -1176,8 +914,15 @@ def create_graph(name: str = "Graph", enable_cache: bool = True, input_data: Opt
         name: Optional name for the graph
         enable_cache: Whether to enable memoization
         input_data: Optional initial data to process
+        optimize_ports: If True, analyzes operations to optimize metadata usage
+                          for implicit branching and memory efficiency
         
     Returns:
         A new Graph instance
     """
-    return Graph(name, enable_cache=enable_cache, input_data=input_data)
+    return Graph(
+        name, 
+        enable_cache=enable_cache, 
+        input_data=input_data,
+        optimize_ports=optimize_ports
+    )

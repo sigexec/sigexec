@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 import numpy as np
-from ..core.data import SignalData
+from ..core.data import GraphData
 
 
 @dataclass
@@ -12,9 +12,9 @@ class Normalize:
     """
     method: str = 'max'  # 'max', 'mean', 'std'
     
-    def __call__(self, signal_data: SignalData) -> SignalData:
+    def __call__(self, gdata: GraphData) -> GraphData:
         """Normalize the signal data."""
-        data = signal_data.data
+        data = gdata.data
         
         if self.method == 'max':
             normalized = data / np.max(np.abs(data))
@@ -25,10 +25,7 @@ class Normalize:
         else:
             normalized = data
         
-        metadata = signal_data.metadata.copy()
-        metadata['normalized'] = self.method
+        gdata.data = normalized
+        gdata.normalized = self.method
         
-        return SignalData(
-            data=normalized,
-            metadata=metadata
-        )
+        return gdata

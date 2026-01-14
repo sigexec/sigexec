@@ -7,7 +7,7 @@ custom blocks that work seamlessly with the sigchain framework.
 
 import numpy as np
 from dataclasses import dataclass
-from sigexec import SignalData, Graph
+from sigexec import GraphData, Graph
 
 
 # Custom block using dataclass pattern
@@ -16,18 +16,14 @@ class CustomAmplifier:
     """Custom block that amplifies signal by a gain factor."""
     gain: float = 2.0
     
-    def __call__(self, signal_data: SignalData) -> SignalData:
+    def __call__(self, gdata: GraphData) -> GraphData:
         """Amplify the signal."""
-        amplified = signal_data.data * self.gain
+        amplified = gdata.data * self.gain
+        gdata.data = amplified
+        gdata.amplified = True
+        gdata.gain = self.gain
         
-        metadata = signal_data.metadata.copy()
-        metadata['amplified'] = True
-        metadata['gain'] = self.gain
-        
-        return SignalData(
-            data=amplified,
-            metadata=metadata
-        )
+        return gdata
 
 
 # Custom block using dataclass pattern with attenuation
@@ -36,18 +32,14 @@ class CustomAttenuator:
     """Custom block that attenuates signal."""
     attenuation: float = 0.5
     
-    def __call__(self, signal_data: SignalData) -> SignalData:
+    def __call__(self, gdata: GraphData) -> GraphData:
         """Attenuate the signal."""
-        attenuated = signal_data.data * self.attenuation
+        attenuated = gdata.data * self.attenuation
+        gdata.data = attenuated
+        gdata.attenuated = True
+        gdata.attenuation = self.attenuation
         
-        metadata = signal_data.metadata.copy()
-        metadata['attenuated'] = True
-        metadata['attenuation'] = self.attenuation
-        
-        return SignalData(
-            data=attenuated,
-            metadata=metadata
-        )
+        return gdata
 
 
 # Custom generator block
@@ -58,12 +50,12 @@ class CustomSignalGenerator:
     duration: float = 0.001
     sample_rate: float = 10000.0
     
-    def __call__(self, signal_data: SignalData = None) -> SignalData:
+    def __call__(self, gdata: GraphData = None) -> GraphData:
         """Generate a simple sinusoidal signal."""
         t = np.arange(0, self.duration, 1/self.sample_rate)
         signal = np.sin(2 * np.pi * self.frequency * t)
         
-        return SignalData(
+        return GraphData(
             data=signal,
             metadata={
                 'sample_rate': self.sample_rate,
@@ -77,11 +69,11 @@ class CustomSignalGenerator:
 # Custom analysis block (doesn't modify signal)
 @dataclass
 class CustomStatistics:
-    """Custom block that adds statistics to metadata."""
+    """Custom block that adds statistics to ports."""
     
-    def __call__(self, signal_data: SignalData) -> SignalData:
+    def __call__(self, gdata: GraphData) -> GraphData:
         """Compute and add statistics."""
-        data = signal_data.data
+        data = gdata.data
         
         stats = {
             'mean': float(np.mean(np.abs(data))),
@@ -89,14 +81,9 @@ class CustomStatistics:
             'max': float(np.max(np.abs(data))),
             'min': float(np.min(np.abs(data))),
         }
+        gdata.statistics = stats
         
-        metadata = signal_data.metadata.copy()
-        metadata['statistics'] = stats
-        
-        return SignalData(
-            data=data,  # Unchanged
-            metadata=metadata
-        )
+        return gdata
 
 
 def test_custom_dataclass_block():
@@ -105,7 +92,7 @@ def test_custom_dataclass_block():
     
     # Create test signal
     data = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
-    signal = SignalData(data=data, metadata={'sample_rate': 1000.0})
+    signal = GraphData(data=data, metadata={'sample_rate': 1000.0})
     
     # Apply custom amplifier
     amplifier = CustomAmplifier(gain=3.0)
@@ -115,8 +102,8 @@ def test_custom_dataclass_block():
     expected = data * 3.0
     np.testing.assert_array_almost_equal(result.data, expected)
     assert result.sample_rate == signal.sample_rate
-    assert result.metadata['amplified'] == True
-    assert result.metadata['gain'] == 3.0
+    assert result.amplified == True
+    assert result.gain == 3.0
     
     print("  ✓ Custom dataclass block works correctly")
 
@@ -132,8 +119,8 @@ def test_custom_generator():
     # Verify
     assert signal.data.shape[0] == 100  # 0.01s * 10000 Hz
     assert signal.sample_rate == 10000.0
-    assert signal.metadata['generated'] == True
-    assert signal.metadata['frequency'] == 500.0
+    assert signal.generated == True
+    assert signal.frequency == 500.0
     
     print("  ✓ Custom generator block works correctly")
 
@@ -153,10 +140,10 @@ def test_custom_blocks_in_pipeline():
     result = graph.run()
     
     # Verify graph executed correctly
-    assert result.metadata['generated'] == True
-    assert result.metadata['amplified'] == True
-    assert result.metadata['attenuated'] == True
-    assert 'statistics' in result.metadata
+    assert result.generated == True
+    assert result.amplified == True
+    assert result.attenuated == True
+    assert result.has_port('statistics')
     
     # Verify final result (2.0 gain * 0.5 attenuation = 1.0x original)
     # Generate reference
@@ -183,58 +170,55 @@ def test_custom_blocks_composition():
     result = stats(att(amp(gen())))
     
     # Verify
-    assert result.metadata['generated'] == True
-    assert result.metadata['amplified'] == True
-    assert result.metadata['attenuated'] == True
-    assert 'statistics' in result.metadata
+    assert result.generated == True
+    assert result.amplified == True
+    assert result.attenuated == True
+    assert result.has_port('statistics')
     
     # Net gain should be 5.0 * 0.2 = 1.0
-    expected_max = result.metadata['statistics']['max']
+    expected_max = result.statistics['max']
     assert 0.8 < expected_max < 1.2  # Should be close to 1.0
     
     print("  ✓ Custom block composition works correctly")
 
 
-def test_custom_blocks_branching():
-    """Test custom blocks with graph branching."""
-    print("Testing custom blocks with branching...")
+def test_custom_blocks_multiple_graphs():
+    """Test custom blocks work in multiple independent graphs."""
+    print("Testing custom blocks in multiple graphs...")
     
-    # Create base graph
-    base = (Graph("Base")
-        .add(CustomSignalGenerator(frequency=1000.0))
-        .add(CustomAmplifier(gain=2.0))
-    )
+    # Create three independent graphs with shared initial stages
+    gen = CustomSignalGenerator(frequency=1000.0)
+    amp = CustomAmplifier(gain=2.0)
     
-    # Create branches with different processing
-    # Note: Due to current cache implementation, we need different operation names
-    branch1 = base.branch_copy().add(CustomAttenuator(attenuation=0.1), name="Att_0.1")
-    branch2 = base.branch_copy().add(CustomAttenuator(attenuation=0.5), name="Att_0.5")
-    branch3 = base.branch_copy().add(CustomStatistics(), name="Stats")
+    # Disable cache to ensure independent execution
+    graph1 = Graph("Graph1", enable_cache=False).add(gen).add(amp).add(CustomAttenuator(attenuation=0.1))
+    graph2 = Graph("Graph2", enable_cache=False).add(gen).add(amp).add(CustomAttenuator(attenuation=0.5))
+    graph3 = Graph("Graph3", enable_cache=False).add(gen).add(amp).add(CustomStatistics())
     
-    # Run branches (should reuse cached base results)
-    result1 = branch1.run()
-    result2 = branch2.run()
-    result3 = branch3.run()
+    # Run graphs independently
+    result1 = graph1.run()
+    result2 = graph2.run()
+    result3 = graph3.run()
     
-    # Verify branches produced different results due to different attenuation
+    # Verify graphs produced different results due to different attenuation
     max1 = np.max(np.abs(result1.data))
     max2 = np.max(np.abs(result2.data))
-    # Branch 1 has 0.1 attenuation, branch 2 has 0.5, so max1 should be smaller
-    assert max1 < max2, f"Expected branch1 ({max1}) < branch2 ({max2})"
+    # Graph 1 has 0.1 attenuation, graph 2 has 0.5, so max1 should be smaller
+    assert max1 < max2, f"Expected graph1 ({max1}) < graph2 ({max2})"
     
-    # Verify branch 3 has statistics
-    assert 'statistics' in result3.metadata
+    # Verify graph 3 has statistics
+    assert result3.has_port('statistics')
     
-    # Verify all have amplified metadata (from shared base)
-    assert result1.metadata['amplified'] == True
-    assert result2.metadata['amplified'] == True
-    assert result3.metadata['amplified'] == True
+    # Verify all have amplified port (from shared base)
+    assert result1.amplified == True
+    assert result2.amplified == True
+    assert result3.amplified == True
     
     # Verify correct attenuation values
-    assert result1.metadata['attenuation'] == 0.1
-    assert result2.metadata['attenuation'] == 0.5
+    assert result1.attenuation == 0.1
+    assert result2.attenuation == 0.5
     
-    print("  ✓ Custom blocks work correctly with branching")
+    print("  ✓ Custom blocks work correctly in multiple graphs")
 
 
 def test_custom_block_metadata_preservation():
@@ -243,7 +227,7 @@ def test_custom_block_metadata_preservation():
     
     # Create signal with initial metadata
     data = np.array([1.0, 2.0, 3.0])
-    signal = SignalData(
+    signal = GraphData(
         data=data,
         metadata={'sample_rate': 1000.0, 'initial_key': 'initial_value', 'count': 0}
     )
@@ -255,11 +239,11 @@ def test_custom_block_metadata_preservation():
     result = att(amp(signal))
     
     # Verify original metadata preserved
-    assert result.metadata['initial_key'] == 'initial_value'
+    assert result.initial_key == 'initial_value'
     
     # Verify new metadata added
-    assert result.metadata['amplified'] == True
-    assert result.metadata['attenuated'] == True
+    assert result.amplified == True
+    assert result.attenuated == True
     
     print("  ✓ Metadata preserved correctly through custom blocks")
 

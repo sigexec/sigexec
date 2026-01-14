@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 import numpy as np
-from ..core.data import SignalData
+from ..core.data import GraphData
 
 
 @dataclass
@@ -16,9 +16,9 @@ class DopplerCompress:
     window: str = 'hann'
     oversample_factor: int = 1
     
-    def __call__(self, signal_data: SignalData) -> SignalData:
+    def __call__(self, gdata: GraphData) -> GraphData:
         """Apply FFT for Doppler compression with optional oversampling."""
-        data = signal_data.data
+        data = gdata.data
         num_pulses, num_samples = data.shape
         
         # Apply window function if specified
@@ -50,21 +50,18 @@ class DopplerCompress:
         )
         
         # Calculate Doppler frequency axis
-        if 'pulse_repetition_interval' in signal_data.metadata:
-            pri = signal_data.metadata['pulse_repetition_interval']
+        if gdata.has_port('pulse_repetition_interval'):
+            pri = gdata.pulse_repetition_interval
             doppler_freq = np.fft.fftshift(np.fft.fftfreq(nfft, pri))
         else:
             doppler_freq = np.arange(nfft) - nfft // 2
         
-        metadata = signal_data.metadata.copy()
-        metadata['doppler_compressed'] = True
-        metadata['range_doppler_map'] = True
-        metadata['doppler_frequencies'] = doppler_freq
-        metadata['window_applied'] = self.window
-        metadata['doppler_oversample_factor'] = self.oversample_factor
-        metadata['num_doppler_bins'] = nfft
+        gdata.data = range_doppler_map
+        gdata.doppler_compressed = True
+        gdata.range_doppler_map = True
+        gdata.doppler_frequencies = doppler_freq
+        gdata.window_applied = self.window
+        gdata.doppler_oversample_factor = self.oversample_factor
+        gdata.num_doppler_bins = nfft
         
-        return SignalData(
-            data=range_doppler_map,
-            metadata=metadata
-        )
+        return gdata
