@@ -6,7 +6,7 @@ with built-in blocks in a processing graph.
 """
 
 import numpy as np
-from sigexec import Graph, SignalData
+from sigexec import Graph, GraphData
 from sigexec.blocks import LFMGenerator
 from sigexec.diagnostics import plot_timeseries
 
@@ -37,25 +37,30 @@ def create_dashboard() -> sd.Dashboard:
     # Add code example
     page.add_header("Code Example", level=2)
     code_example = """
-from sigexec import Graph, SignalData
+from sigexec import Graph, GraphData
 from sigexec.blocks import LFMGenerator
 from sigexec.diagnostics import plot_timeseries
 import numpy as np
 
 # Define custom processing function inline
-def apply_threshold(signal_data: SignalData, threshold_factor=0.1) -> SignalData:
-    data = signal_data.data.copy()
+def apply_threshold(gdata: GraphData, threshold_factor=0.1) -> GraphData:
+    data = gdata.data.copy()
     threshold = threshold_factor * np.max(np.abs(data))
     data[np.abs(data) < threshold] = 0
-    return SignalData(data, signal_data.metadata)
+    gdata.data = data
+    gdata.metadata['threshold_applied'] = float(threshold)
+    return gdata
 
 # Define another custom block - normalize signal
-def normalize_signal(signal_data: SignalData) -> SignalData:
-    data = signal_data.data.copy()
+def normalize_signal(gdata: GraphData) -> GraphData:
+    data = gdata.data.copy()
     max_val = np.max(np.abs(data))
     if max_val > 0:
         data = data / max_val
-    return SignalData(data, signal_data.metadata)
+    gdata.data = data
+    gdata.metadata['normalized'] = True
+    gdata.metadata['original_max'] = float(max_val)
+    return gdata
 
 # Compose graph with custom blocks
 page = sd.Page('demo', 'Demo')
@@ -74,25 +79,29 @@ result = (Graph("CustomDemo")
     page.add_syntax(code_example, language='python')
     
     # Define custom processing functions inline
-    def apply_threshold(signal_data: SignalData, threshold_factor=0.1) -> SignalData:
-        """Remove values below a threshold."""
-        data = signal_data.data.copy()
+    def apply_threshold(gdata: GraphData, threshold_factor=0.1) -> GraphData:
+        """Remove values below a threshold and record metadata."""
+        data = gdata.data.copy()
         threshold = threshold_factor * np.max(np.abs(data))
         data[np.abs(data) < threshold] = 0
-        metadata = signal_data.metadata.copy()
-        metadata['threshold_applied'] = threshold
-        return SignalData(data, metadata)
+        gdata.data = data
+        # Ensure metadata dict exists and record threshold
+        md = gdata.metadata
+        md['threshold_applied'] = float(threshold)
+        # GraphData.metadata returns a dict view; assign back via ports
+        gdata.set('threshold_applied', float(threshold))
+        return gdata
     
-    def normalize_signal(signal_data: SignalData) -> SignalData:
-        """Normalize signal to max amplitude of 1."""
-        data = signal_data.data.copy()
-        max_val = np.max(np.abs(data))
+    def normalize_signal(gdata: GraphData) -> GraphData:
+        """Normalize signal to max amplitude of 1 and record original max."""
+        data = gdata.data.copy()
+        max_val = float(np.max(np.abs(data)))
         if max_val > 0:
             data = data / max_val
-        metadata = signal_data.metadata.copy()
-        metadata['normalized'] = True
-        metadata['original_max'] = max_val
-        return SignalData(data, metadata)
+        gdata.data = data
+        gdata.set('normalized', True)
+        gdata.set('original_max', max_val)
+        return gdata
     
     # Build graph with custom blocks
     page.add_header("Graph Execution", level=2)
