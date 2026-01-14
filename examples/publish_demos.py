@@ -65,12 +65,13 @@ def discover_demo_modules():
     return modules, failures
 
 
-def publish_all_demos(output_dir='docs'):
+def publish_all_demos(output_dir='docs', dry_run=False):
     """
     Discover and run all demo files, publishing them to a single directory.
     
     Args:
         output_dir: Directory to publish to (default: 'docs' for GitHub Pages)
+        dry_run: If True, only discover and validate demos without publishing
     """
     print("\n" + "="*70)
     print("Publishing All sigexec Demos")
@@ -122,6 +123,10 @@ def publish_all_demos(output_dir='docs'):
     if had_errors:
         print("\nOne or more demos failed to build. Aborting publish with error.")
         sys.exit(1)
+
+    if dry_run:
+        print("\nDry run: Skipping actual publishing.")
+        return
 
     print(f"\nPublishing dashboards to {output_dir}/...")
     directory.publish(output_dir)

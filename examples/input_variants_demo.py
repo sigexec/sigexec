@@ -43,7 +43,7 @@ def create_dashboard() -> sd.Dashboard:
     code_example_1 = """
 from sigexec import Graph
 from sigexec.blocks import RangeCompress, DopplerCompress
-from sigexec.core.data import GraphData
+from sigexec import GraphData
 
 # Load or generate different signals
 signal_dataset_a = load_signal("dataset_a.bin")
@@ -110,7 +110,7 @@ for params, result in results:
     
     code_example_2 = """
 from sigexec import Graph
-from sigexec.core.data import GraphData
+from sigexec import GraphData
 import numpy as np
 
 # Create a loader factory - data is loaded only when the variant executes

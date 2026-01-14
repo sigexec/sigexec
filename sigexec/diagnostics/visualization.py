@@ -10,11 +10,11 @@ import plotly.graph_objects as go
 import plotly.express as px
 from plotly.subplots import make_subplots
 from typing import Optional, Tuple
-from sigexec.core.data import GraphData as SignalData
+from sigexec import GraphData
 
 
 def plot_timeseries(
-    signal_data: SignalData,
+    signal_data: GraphData,
     title: str = "Signal Timeseries",
     show_real: bool = True,
     show_imag: bool = True,
@@ -26,7 +26,7 @@ def plot_timeseries(
     Create an interactive timeseries plot of signal data.
     
     Args:
-        signal_data: SignalData object to plot
+        signal_data: GraphData object to plot
         title: Plot title
         show_real: Show real component
         show_imag: Show imaginary component  
@@ -97,7 +97,7 @@ def plot_timeseries(
 
 
 def plot_pulse_matrix(
-    signal_data: SignalData,
+    signal_data: GraphData,
     title: str = "Pulse Matrix",
     colorscale: str = "Greys",
     height: int = 500,
@@ -108,7 +108,7 @@ def plot_pulse_matrix(
     Create a heatmap visualization of pulse data (2D matrix).
     
     Args:
-        signal_data: SignalData object with 2D data (pulses x samples)
+        signal_data: GraphData object with 2D data (pulses x samples)
         title: Plot title
         colorscale: Plotly colorscale name
         height: Plot height in pixels
@@ -165,7 +165,7 @@ def plot_pulse_matrix(
 
 
 def plot_range_profile(
-    signal_data: SignalData,
+    signal_data: GraphData,
     title: str = "Range Profile",
     pulse_index: Optional[int] = None,
     use_db: bool = True,
@@ -175,7 +175,7 @@ def plot_range_profile(
     Plot range profile (single pulse or averaged).
     
     Args:
-        signal_data: SignalData with range-compressed data
+        signal_data: GraphData with range-compressed data
         title: Plot title
         pulse_index: Specific pulse to plot (None = average all)
         use_db: Convert to dB scale
@@ -249,7 +249,7 @@ def plot_range_profile(
 
 
 def plot_range_doppler_map(
-    signal_data: SignalData,
+    signal_data: GraphData,
     title: str = "Range-Doppler Map",
     colorscale: str = "Greys",
     height: int = 600,
@@ -261,7 +261,7 @@ def plot_range_doppler_map(
     Create an interactive range-Doppler map visualization.
     
     Args:
-        signal_data: SignalData with range-doppler map
+        signal_data: GraphData with range-doppler map
         title: Plot title
         colorscale: Plotly colorscale name
         height: Plot height in pixels
@@ -348,7 +348,7 @@ def plot_range_doppler_map(
 
 
 def plot_spectrum(
-    signal_data: SignalData,
+    signal_data: GraphData,
     title: str = "Frequency Spectrum",
     use_db: bool = True,
     height: int = 400,
@@ -357,7 +357,7 @@ def plot_spectrum(
     Plot frequency spectrum of signal.
     
     Args:
-        signal_data: SignalData object
+        signal_data: GraphData object
         title: Plot title
         use_db: Convert to dB scale
         height: Plot height in pixels
@@ -408,7 +408,7 @@ def plot_spectrum(
 
 
 def create_comparison_plot(
-    signals: list[SignalData],
+    signals: list[GraphData],
     labels: list[str],
     title: str = "Signal Comparison",
     plot_type: str = "timeseries",
@@ -418,7 +418,7 @@ def create_comparison_plot(
     Create a comparison plot of multiple signals.
     
     Args:
-        signals: List of SignalData objects
+        signals: List of GraphData objects
         labels: List of labels for each signal
         title: Plot title
         plot_type: Type of plot ('timeseries', 'spectrum', 'magnitude')

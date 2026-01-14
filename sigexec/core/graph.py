@@ -80,15 +80,15 @@ class Graph:
     those stages only execute once and the result is cached:
     
     Example:
-        >>> base = Graph().add(gen).add(stack).add(compress_range)
-        >>> branch1 = base.branch().add(doppler_hann)
-        >>> branch2 = base.branch().add(doppler_hamming)
+        >>> base = Graph().add(process_a).add(process_b).add(transform)
+        >>> branch1 = base.branch().add(filter_hann)
+        >>> branch2 = base.branch().add(filter_hamming)
         >>> 
-        >>> # When you run branch1, it executes gen -> stack -> compress_range
+        >>> # When you run branch1, it executes process_a -> process_b -> transform
         >>> result1 = branch1.run()
         >>> 
-        >>> # When you run branch2, it reuses the cached result after compress_range!
-        >>> result2 = branch2.run()  # Only executes doppler_hamming
+        >>> # When you run branch2, it reuses the cached result after transform!
+        >>> result2 = branch2.run()  # Only executes filter_hamming
     """
     
     # Class-level cache shared across all graph instances
@@ -163,8 +163,8 @@ class Graph:
             >>> my_data = GraphData(data_array, sample_rate=20e6)
             >>> result = (Graph()
             ...     .input_data(my_data)
-            ...     .add(RangeCompress())
-            ...     .add(DopplerCompress())
+            ...     .add(lambda x: x * 2)  # Double the values
+            ...     .add(lambda x: x + 1)  # Add offset
             ...     .run()
             ... )
         """
@@ -194,8 +194,8 @@ class Graph:
             >>> results = (Graph()
             ...     .input_variants([signal1, signal2, signal3],
             ...                    names=['Dataset A', 'Dataset B', 'Dataset C'])
-            ...     .add(RangeCompress())
-            ...     .add(DopplerCompress())
+            ...     .add(lambda x: x * 2)  # Double values
+            ...     .add(lambda x: x + 1)  # Add offset
             ...     .run()
             ... )
             >>> # Returns list of (params, result) tuples, one for each input signal
@@ -302,74 +302,6 @@ class Graph:
         # Tap operations shouldn't be cached (they're for side effects)
         return self.add(wrapper, name=name or "tap", cacheable=False)
     
-    def plot(
-        self,
-        page=None,
-        plotter: Optional[Callable[[GraphData], None]] = None,
-        plot_type: Optional[str] = None,
-        title: str = "Plot",
-        name: Optional[str] = None,
-        **plot_kwargs
-    ) -> 'Graph':
-        """
-        Add a plotting function that visualizes the signal without modifying it.
-        
-        Can be used in two ways:
-        1. With a staticdash page and plot_type:
-           .plot(page, plot_type='timeseries', title="My Plot")
-        2. With a custom plotter function:
-           .plot(plotter=my_plot_function)
-        
-        Args:
-            page: staticdash Page object to add plot to
-            plotter: Custom function that plots GraphData
-            plot_type: Type of plot ('timeseries', 'pulse_matrix', 'range_profile', 
-                      'range_doppler_map', 'spectrum')
-            title: Plot title
-            name: Optional name for this operation
-            **plot_kwargs: Additional keyword arguments for the plot function
-            
-        Returns:
-            Self for method chaining
-        """
-        if page is not None and plot_type is not None:
-            # Import here to avoid circular dependency
-            from ..diagnostics.plot_blocks import (
-                add_timeseries_plot,
-                add_pulse_matrix_plot,
-                add_range_profile_plot,
-                add_range_doppler_map_plot,
-                add_spectrum_plot,
-            )
-            
-            plot_functions = {
-                'timeseries': add_timeseries_plot,
-                'pulse_matrix': add_pulse_matrix_plot,
-                'range_profile': add_range_profile_plot,
-                'range_doppler_map': add_range_doppler_map_plot,
-                'spectrum': add_spectrum_plot,
-            }
-            
-            if plot_type not in plot_functions:
-                raise ValueError(f"Unknown plot_type '{plot_type}'. Must be one of: {list(plot_functions.keys())}")
-            
-            plot_func = plot_functions[plot_type]
-            
-            def plotter_wrapper(signal_data: GraphData) -> None:
-                plot_func(page, signal_data, title=title, **plot_kwargs)
-            
-            return self.tap(plotter_wrapper, name=name or f"plot_{plot_type}")
-        
-        elif plotter is not None:
-            # Use custom plotter function
-            return self.tap(plotter, name=name or "plot")
-        
-        else:
-            raise ValueError("Must provide either (page and plot_type) or plotter function")
-    
-    
-    
-    
     def variant(
         self,
         operation_factory: Callable[[Any], Callable[[GraphData], GraphData]],
@@ -392,13 +324,13 @@ class Graph:
         
         Example:
             >>> results = (Graph()
-            ...     .add(gen).add(stack)
-            ...     .variant(lambda w: RangeCompress(window=w), 
+            ...     .add(process_a).add(process_b)
+            ...     .variant(lambda w: lambda x: apply_window(x, w), 
             ...               ['hamming', 'hann'],
             ...               names=['Hamming', 'Hann'])
-            ...     .variant(lambda w: DopplerCompress(window=w), 
-            ...               ['hann', 'blackman'],
-            ...               names=['Hann', 'Blackman'])
+            ...     .variant(lambda thresh: lambda x: threshold(x, thresh), 
+            ...               [0.1, 0.2],
+            ...               names=['Low', 'High'])
             ...     .run()
             ... )
             >>> # Returns 4 results: all combinations
@@ -548,12 +480,27 @@ class Graph:
         if not self._optimize_ports:
             return result
         
-        # Merge: operation's output metadata takes precedence
-        merged_metadata = original_metadata.copy()
-        merged_metadata.update(result.metadata)
+        # If the operation returned a GraphData, merge its metadata safely
+        if isinstance(result, GraphData):
+            merged_metadata = original_metadata.copy()
+            try:
+                merged_metadata.update(result.metadata)
+            except Exception:
+                # If result.metadata isn't a mapping for any reason, ignore
+                pass
 
-        data_val = result.ports.get('data') if hasattr(result, 'ports') else None
-        return GraphData(data=data_val, metadata=merged_metadata)
+            # Safely get 'data' without allowing enforcing trackers to raise
+            data_val = None
+            if hasattr(result, 'ports'):
+                try:
+                    data_val = result.ports.get('data')
+                except Exception:
+                    data_val = None
+
+            return GraphData(data=data_val, metadata=merged_metadata)
+
+        # If the operation returned a raw value (array, scalar, etc.), treat it as data
+        return GraphData(data=result, metadata=original_metadata)
     
     def _execute_with_metadata_optimization(
         self,

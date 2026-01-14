@@ -101,9 +101,9 @@ def create_dashboard() -> 'sd.Dashboard':
 
     page.add_text('Optimizer log:')
     # Show the captured log as a code block for clarity
-    page.add_text(f"```
+    page.add_text(f"""```
 {log_text.strip()}
-```")
+```""")
 
     page.add_text('Result ports:')
     page.add_text(f"Available ports after run: {list(result.ports.keys())}")
@@ -155,9 +155,9 @@ def create_dashboard() -> 'sd.Dashboard':
         bad_msg = str(e)
 
     page.add_text('Declared bad op (should error in strict mode):')
-    page.add_text(f"```
+    page.add_text(f"""```
 {bad_msg}
-```")
+```""")
 
     dashboard.add_page(page)
 
