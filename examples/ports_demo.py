@@ -50,7 +50,66 @@ def create_dashboard() -> 'sd.Dashboard':
     page.add_text('Scaled signal:')
     page.add_plot(plot_timeseries(GraphData(data=result.data, sample_rate=100.0), title='Scaled'))
 
+    # ------------------------------------------------------------------
+    # Port Optimization demonstration (Graph(optimize_ports=True))
+    # ------------------------------------------------------------------
+    page.add_header('Port optimization demo', level=2)
+    page.add_text(
+        'This section demonstrates Graph(optimize_ports=True). It analyzes each '
+        'stage to determine which ports it reads and passes only those ports to the stage.'
+    )
+
+    import io, logging
+
+    # Simple operations that touch different ports
+    def op_a(g: GraphData) -> GraphData:
+        # reads only 'a'
+        val = g.a
+        g.a_out = val + 1
+        return g
+
+    def op_b(g: GraphData) -> GraphData:
+        # reads only 'b'
+        val = g.b
+        g.b_out = val * 2
+        return g
+
+    # Prepare data with two independent ports
+    sample = GraphData()
+    sample.a = 10
+    sample.b = 3
+
+    # Capture logs from the port optimizer
+    log_stream = io.StringIO()
+    handler = logging.StreamHandler(log_stream)
+    logger = logging.getLogger('sigexec.core.port_optimizer')
+    logger.setLevel(logging.DEBUG)
+    logger.addHandler(handler)
+
+    # Run the optimized graph
+    g = (Graph(name='PortOptDemo', optimize_ports=True)
+         .add(op_a, name='op_a')
+         .add(op_b, name='op_b'))
+
+    result = g.run(sample, verbose=False)
+
+    # Flush and remove handler
+    handler.flush()
+    logger.removeHandler(handler)
+
+    log_text = log_stream.getvalue()
+
+    page.add_text('Optimizer log:')
+    # Show the captured log as a code block for clarity
+    page.add_text(f"```
+{log_text.strip()}
+```")
+
+    page.add_text('Result ports:')
+    page.add_text(f"Available ports after run: {list(result.ports.keys())}")
+
     dashboard.add_page(page)
+
     return dashboard
     print("=" * 70)
     print()

@@ -446,9 +446,25 @@ class Graph:
         
         # For runtime analysis, create a tiny sample to avoid expensive operations
         if sample_data is not None:
-            # Create a minimal sample with same metadata but tiny data
+            # If the provided sample has a 'data' port, attempt to mimic its shape
+            try:
+                has_data = 'data' in sample_data.ports
+            except Exception:
+                has_data = False
+
+            if has_data:
+                try:
+                    data_shape_len = 1 if sample_data.shape is None else (len(sample_data.shape) if hasattr(sample_data, 'shape') else 1)
+                except Exception:
+                    data_shape_len = 1
+
+                tiny_data = np.zeros((2, 2) if data_shape_len > 1 else 2)
+            else:
+                # No data port - use a small 1-D sample to be safe
+                tiny_data = np.zeros(2)
+
             tiny_sample = GraphData(
-                data=np.zeros((2, 2) if len(sample_data.shape) > 1 else 2),
+                data=tiny_data,
                 metadata=sample_data.metadata.copy()
             )
             analysis_sample = tiny_sample
@@ -497,7 +513,8 @@ class Graph:
             # Operation doesn't use metadata
             if verbose:
                 print(f"    Metadata optimization: No metadata needed")
-            return GraphData(data=signal_data.data, metadata={})
+            data_val = signal_data.ports.get('data') if hasattr(signal_data, 'ports') else None
+            return GraphData(data=data_val, metadata={})
         
         # Create subset
         optimized_metadata = create_port_subset(signal_data.metadata, needed_keys)
@@ -507,7 +524,8 @@ class Graph:
             opt_size = len(optimized_metadata)
             print(f"    Metadata optimization: {full_size} -> {opt_size} keys ({needed_keys})")
         
-        return GraphData(data=signal_data.data, metadata=optimized_metadata)
+        data_val = signal_data.ports.get('data') if hasattr(signal_data, 'ports') else None
+        return GraphData(data=data_val, metadata=optimized_metadata)
     
     def _restore_full_metadata(
         self,
@@ -530,8 +548,9 @@ class Graph:
         # Merge: operation's output metadata takes precedence
         merged_metadata = original_metadata.copy()
         merged_metadata.update(result.metadata)
-        
-        return GraphData(data=result.data, metadata=merged_metadata)
+
+        data_val = result.ports.get('data') if hasattr(result, 'ports') else None
+        return GraphData(data=data_val, metadata=merged_metadata)
     
     def _execute_with_metadata_optimization(
         self,
