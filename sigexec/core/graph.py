@@ -1,5 +1,5 @@
 """
-Fluent graph interface for signal processing.
+Fluent graph interface for data processing.
 
 This module provides a cleaner, more functional approach to building
 signal processing graphs using method chaining and lambda functions.
