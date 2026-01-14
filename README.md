@@ -188,13 +188,181 @@ for params, result in results:
 
 ### Visualizing Graphs
 
+SigExec can generate Mermaid diagrams to visualize your processing flow **without running it**:
+
 ```python
-# Check graph structure before running
-graph = Graph("MyPipeline")
-graph.add(operation1).add(operation2)
-print(graph.visualize())  # See operation sequence
-print(repr(graph))        # Quick summary
+from sigexec import Graph
+from sigexec.blocks import LFMGenerator, StackPulses, RangeCompress, DopplerCompress
+
+# Build a graph
+graph = (Graph("Radar Processing")
+    .add(LFMGenerator(num_pulses=128), name="Generate_LFM")
+    .add(StackPulses(), name="Stack_Pulses")
+    .add(RangeCompress(), name="Range_Compress")
+    .add(DopplerCompress(window='hann'), name="Doppler_Compress"))
+
+# Get Mermaid diagram
+print(graph.to_mermaid())
+
+# Or save to file (renders in VS Code, GitHub, etc.)
+graph.visualize("radar_flow.md")
 ```
+
+This generates a flowchart showing the complete processing pipeline with all operations, branches, and merges.
+
+### Inspecting Graphs
+
+**New Feature**: You can inspect the graph structure before running it using the same logic that executes the graph:
+
+```python
+# Create sample input for port analysis
+sample = GraphData()
+sample.data = np.array([1, 2, 3])
+sample.sample_rate = 1e6
+
+# Inspect as structured data
+info = graph.inspect(sample, format='dict')
+print(f"Graph has {len(info['nodes'])} nodes and {len(info['edges'])} edges")
+
+for edge in info['edges']:
+    print(f"{edge['from']} -> {edge['to']} (ports: {edge['ports']})")
+
+# Inspect as Mermaid diagram
+mermaid = graph.inspect(sample, format='mermaid')
+print(mermaid)  # Shows flowchart with port information
+```
+
+**Why inspect?**
+- **Same logic as execution**: The inspection uses the exact same graph walking logic as `run()`, ensuring what you see is what will execute
+- **See before you run**: Understand data flow, branches, and port usage without actually executing operations
+- **Debug graph structure**: Verify branches are created correctly and merge points are where you expect
+
+The key difference from `visualize()`: `inspect()` uses the **exact same unified graph walker** as execution, just in inspection mode instead of execution mode. This guarantees the visualization matches actual runtime behavior.
+
+#### Visualizing Branches
+
+```python
+graph = (Graph("Branched Processing")
+    .add(generate_data, name="Generate")
+    .branch(["filter_a", "filter_b"])
+    .add(filter_a, branch="filter_a", name="Filter_A")
+    .add(filter_b, branch="filter_b", name="Filter_B")
+    .merge(merge_fn, branches=["filter_a", "filter_b"], name="Merge"))
+
+# Shows branches as separate paths with dotted lines
+graph.visualize("branched_flow.md")
+```
+
+#### Visualizing Variants
+
+```python
+graph = (Graph("Variant Exploration")
+    .add(load_data, name="Load")
+    .variant(lambda w: apply_window(w),
+             ['hamming', 'hann', 'blackman'],
+             names=['Hamming', 'Hann', 'Blackman']))
+
+# Shows variant node with configuration options
+graph.visualize("variants_flow.md")
+```
+
+### Port Optimization (Default Behavior)
+
+**By default** (`optimize_ports=True`), operations only receive the ports they actually use. Unused ports "bypass" operations entirely, improving memory efficiency and making data flow explicit.
+
+#### Visual Comparison
+
+Here's how port flow differs between the two modes:
+
+**WITHOUT Port Optimization (`optimize_ports=False`):**
+
+All ports flow through every operation (solid arrows everywhere):
+
+````markdown
+```mermaid
+flowchart LR
+    source([source]) --|a, b|--> use_a
+    use_a[use_a] --|a, b, result_a|--> use_b
+    use_b[use_b] --|a, b, result_a, result_b|--> combine
+    combine[combine] --> final([final])
+```
+````
+
+```mermaid
+flowchart LR
+    source([source]) --|a, b|--> use_a
+    use_a[use_a] --|a, b, result_a|--> use_b
+    use_b[use_b] --|a, b, result_a, result_b|--> combine
+    combine[combine] --> final([final])
+```
+
+❌ Port `b` unnecessarily flows through `use_a` (which only needs `a`)  
+❌ Ports `a` and `result_a` unnecessarily flow through `use_b` (which only needs `b`)
+
+**WITH Port Optimization (`optimize_ports=True` - Default):**
+
+Only needed ports flow to each operation (solid arrows). Unused ports bypass (dotted arrows):
+
+````markdown
+```mermaid
+flowchart LR
+    source([source]) --|a|--> use_a
+    source -.b bypasses use_a.-> use_b
+    use_a[use_a] --|result_a|--> combine
+    use_a -.b continues.-> use_b
+    use_b[use_b] --|b, result_b|--> combine
+    use_b -.result_a bypasses.-> combine
+    combine[combine] --> final([final])
+```
+````
+
+```mermaid
+flowchart LR
+    source([source]) --|a|--> use_a
+    source -.b bypasses use_a.-> use_b
+    use_a[use_a] --|result_a|--> combine
+    use_a -.b continues.-> use_b
+    use_b[use_b] --|b, result_b|--> combine
+    use_b -.result_a bypasses.-> combine
+    combine[combine] --> final([final])
+```
+
+✓ Port `b` bypasses `use_a` (shown as dotted line)  
+✓ Ports `a` and `result_a` bypass `use_b` (shown as dotted lines)  
+✓ All ports converge at `combine` which needs everything
+
+#### Code Example
+
+```python
+from sigexec import Graph, GraphData, requires_ports
+
+# Declare which ports each operation needs
+@requires_ports('a')
+def use_a(g):
+    g.result_a = g.a * 2
+    return g
+
+@requires_ports('b')
+def use_b(g):
+    g.result_b = g.b * 3
+    return g
+
+# With optimize_ports=True (default):
+# - use_a receives ONLY 'a' (b bypasses it)
+# - use_b receives ONLY 'b' (a, result_a bypass it)
+graph = Graph()  # optimize_ports=True by default
+
+# To disable optimization (old behavior - all ports flow everywhere):
+graph_unoptimized = Graph(optimize_ports=False)
+```
+
+**Benefits of port optimization:**
+- ✓ Memory efficient: Only copy ports that are used
+- ✓ Explicit data flow: Clear which ports each operation needs  
+- ✓ Implicit branching: Operations using different ports naturally create parallel paths
+- ✓ Backwards compatible: Set `optimize_ports=False` for old behavior
+
+See [examples/port_optimization_visual_demo.py](examples/port_optimization_visual_demo.py) and [examples/mermaid_port_comparison.py](examples/mermaid_port_comparison.py) for detailed comparisons.
 
 ### Running Examples
 

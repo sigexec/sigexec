@@ -145,7 +145,8 @@ class TestGraphCaching:
             call_count['count'] += 1
             return GraphData(sig.data * 2, metadata=sig.metadata.copy())
         
-        p = Graph()
+        # Disable port optimization to avoid counting port analysis calls
+        p = Graph(optimize_ports=False)
         p.add(counting_op)
         
         data = GraphData(np.array([1.0]))
@@ -166,7 +167,8 @@ class TestGraphCaching:
             call_count['count'] += 1
             return GraphData(sig.data * 2, metadata=sig.metadata.copy())
         
-        p = Graph(enable_cache=False)
+        # Disable both cache and port optimization to avoid analysis calls
+        p = Graph(enable_cache=False, optimize_ports=False)
         p.add(counting_op)
         
         data = GraphData(np.array([1.0]))
@@ -246,7 +248,8 @@ class TestGraphHelperMethods:
         
         data = GraphData(np.array([1.0, 2.0]))
         
-        p = Graph()
+        # Disable port optimization to avoid analysis side effects
+        p = Graph(optimize_ports=False)
         p.add(lambda sig: GraphData(sig.data * 2, metadata=sig.metadata.copy()))
         p.tap(inspector)
         p.add(lambda sig: GraphData(sig.data + 10, metadata=sig.metadata.copy()))

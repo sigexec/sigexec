@@ -102,7 +102,7 @@ class Graph:
         name: str = "Graph", 
         enable_cache: bool = True, 
         input_data: Optional[GraphData] = None,
-        optimize_ports: bool = False,
+        optimize_ports: bool = True,
         optimize_ports_strict: bool = False
     ):
         """
@@ -112,10 +112,10 @@ class Graph:
             name: Optional name for the graph
             enable_cache: Whether to enable memoization (default: True)
             input_data: Optional initial data to process
-            optimize_ports: If True, analyzes operations to determine which metadata
-                             fields they use and creates optimized subsets. This enables
-                             implicit branching when operations use different metadata
-                             fields, improving memory efficiency (default: False)
+            optimize_ports: If True, analyzes operations to determine which ports
+                             each operation uses and only passes those ports. Unused ports
+                             bypass operations entirely, enabling implicit branching and
+                             improving memory efficiency (default: True)
         """
         self.name = name
         self.operations: List[Dict[str, Any]] = []
@@ -519,13 +519,13 @@ class Graph:
         
         Args:
             operation: The operation to execute
-            signal_data: The input GraphData
+            signal_data: The input GraphData (can be None for generators)
             verbose: Print optimization info
             
         Returns:
             Result GraphData with full metadata
         """
-        if not self._optimize_ports:
+        if not self._optimize_ports or signal_data is None:
             # No optimization - execute directly
             return operation(signal_data)
         
@@ -979,7 +979,7 @@ def create_graph(
     name: str = "Graph", 
     enable_cache: bool = True, 
     input_data: Optional[GraphData] = None,
-    optimize_ports: bool = False
+    optimize_ports: bool = True
 ) -> Graph:
     """
     Factory function to create a new graph.

@@ -57,7 +57,9 @@ class RangeCompress:
             # FFT-based processing with oversampling via zero-padding
             nfft = num_samples * self.oversample_factor
             
-            filtered_data = np.zeros((num_pulses, num_samples), dtype=data.dtype)
+            # Use complex dtype for correlation output
+            output_dtype = np.complex128 if np.iscomplexobj(data) or np.iscomplexobj(reference_pulse) else np.float64
+            filtered_data = np.zeros((num_pulses, num_samples), dtype=output_dtype)
             
             for i in range(num_pulses):
                 signal_fft = np.fft.fft(data[i, :], n=nfft)
@@ -69,22 +71,30 @@ class RangeCompress:
                 filtered_fft = signal_fft * np.conj(reference_fft)
                 filtered_result = np.fft.ifft(filtered_fft)
                 
-                filtered_data[i, :] = filtered_result[:num_samples]
+                # Keep as complex or extract real part based on output dtype
+                if np.iscomplexobj(filtered_data):
+                    filtered_data[i, :] = filtered_result[:num_samples]
+                else:
+                    filtered_data[i, :] = np.real(filtered_result[:num_samples])
             
             output_length = num_samples
         else:
             # Time-domain correlation with 'same' mode for consistent indexing
             output_length = num_samples
             
-            filtered_data = np.zeros((num_pulses, output_length), dtype=data.dtype)
+            # Correlation output is complex if either input is complex
+            output_dtype = np.complex128 if np.iscomplexobj(data) or np.iscomplexobj(reference_pulse) else np.float64
+            filtered_data = np.zeros((num_pulses, output_length), dtype=output_dtype)
             
             for i in range(num_pulses):
                 # Matched filter: correlation with conjugate of reference
-                filtered_data[i, :] = sp_signal.correlate(
+                corr_result = sp_signal.correlate(
                     data[i, :], 
                     np.conj(reference_pulse), 
                     mode='same'
                 )
+                # Assign directly - dtype already matches
+                filtered_data[i, :] = corr_result
         
         gdata.data = filtered_data
         gdata.range_compressed = True

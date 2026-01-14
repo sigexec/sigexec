@@ -61,6 +61,27 @@ def create_dashboard(
     Each stage is visualized with interactive Plotly plots.
     """)
     
+    # Add graph structure visualization
+    page.add_header("Processing Flow Diagram", level=2)
+    page.add_text("""
+    The following diagram shows the complete signal processing flow. This is generated
+    automatically from the graph structure without executing any operations:
+    """)
+    
+    # Create the graph structure (without running it yet)
+    demo_graph = (Graph("Radar Processing")
+        .add(LFMGenerator(num_pulses=num_pulses, target_delay=target_delay, 
+                         target_doppler=target_doppler), name="Generate_LFM")
+        .add(StackPulses(), name="Stack_Pulses")
+        .add(RangeCompress(), name="Range_Compress")
+        .add(DopplerCompress(), name="Doppler_Compress"))
+    
+    page.add_code(demo_graph.to_mermaid(), language='mermaid')
+    page.add_text("""
+    Each box represents a processing stage. The graph is executed sequentially,
+    with each stage transforming the signal data.
+    """)
+    
     # Configuration info - Create pandas DataFrame table
     page.add_header("Configuration", level=2)
     page.add_text("""

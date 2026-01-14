@@ -73,6 +73,19 @@ def create_dashboard() -> sd.Dashboard:
     This demo uses simple operations with artificial delays to clearly demonstrate the concept.
     """)
     
+    # Show graph visualization
+    page.add_header("Graph Structure", level=2)
+    example_graph = (Graph("Example")
+        .add(expensive_load_data(0.2), name="Load_Data")
+        .add(expensive_preprocessing(0.15), name="Preprocess")
+        .variant(lambda f: cheap_operation("variant", f), [1.0, 1.5, 2.0], names=["x1.0", "x1.5", "x2.0"]))
+    
+    page.add_code(example_graph.to_mermaid(), language='mermaid')
+    page.add_text("""
+    The diagram above shows how the expensive operations (Load_Data, Preprocess) are shared
+    across all variants, while only the cheap variant operation differs.
+    """)
+    
     # Demo 1: Show the concept
     page.add_header("Understanding Memoization", level=2)
     page.add_text("""
