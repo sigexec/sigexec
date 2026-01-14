@@ -974,9 +974,12 @@ class Graph:
             return f"Graph('{self.name}'{cache_status}, ops={num_ops}, variants={variant_ops})"
         return f"Graph('{self.name}'{cache_status}, ops={num_ops})"
     
-    def to_mermaid(self) -> str:
+    def to_mermaid(self, show_ports: bool = True) -> str:
         """
         Generate a Mermaid flowchart diagram of the graph structure.
+        
+        Args:
+            show_ports: If True, show which ports flow between operations
         
         Returns:
             String containing Mermaid diagram syntax
@@ -984,22 +987,24 @@ class Graph:
         lines = ["```mermaid", "flowchart TD"]
         lines.append("    start([Start])")
         
-        # Track node IDs
+        # Track node IDs and ports
         node_id = 0
         prev_node = "start"
         branch_nodes = {}  # branch_name -> last_node_id
+        current_ports = set()  # Track available ports at each stage
         
         for idx, op in enumerate(self.operations):
             node_id += 1
             op_type = op.get('type', 'operation')
             name = op.get('name', f'Op{idx}')
             branch = op.get('branch')
+            func = op.get('func')
             
             if op_type == 'branch':
                 # Branch point - create multiple branch paths
                 branches = op.get('branches', [])
                 for br in branches:
-                    branch_nodes[br] = prev_node
+                    branch_nodes[br] = (prev_node, current_ports.copy())
             elif op_type == 'merge':
                 # Merge point - combine branches
                 node_name = f"node{node_id}"
@@ -1009,37 +1014,90 @@ class Graph:
                 merge_branches = op.get('branches', list(branch_nodes.keys()))
                 for br in merge_branches:
                     if br in branch_nodes:
-                        lines.append(f"    {branch_nodes[br]} -.-> |{br}| {node_name}")
+                        br_node, br_ports = branch_nodes[br]
+                        if show_ports and br_ports:
+                            port_str = ', '.join(sorted(br_ports))
+                            lines.append(f"    {br_node} -.{port_str}.-> |{br}| {node_name}")
+                        else:
+                            lines.append(f"    {br_node} -.-> |{br}| {node_name}")
                 
                 prev_node = node_name
                 branch_nodes = {}  # Reset branches after merge
+                # Merge collects all ports from branches
             elif op_type == 'variants':
                 # Variant node
                 node_name = f"node{node_id}"
                 variant_names = ', '.join(op['variant_spec']['names'])
                 lines.append(f"    {node_name}[/Variant: {variant_names}/]")
-                lines.append(f"    {prev_node} --> {node_name}")
+                
+                if show_ports and current_ports:
+                    port_str = ', '.join(sorted(current_ports))
+                    lines.append(f"    {prev_node} --|{port_str}|--> {node_name}")
+                else:
+                    lines.append(f"    {prev_node} --> {node_name}")
                 prev_node = node_name
             else:
                 # Regular operation
                 node_name = f"node{node_id}"
                 lines.append(f"    {node_name}[{name}]")
                 
+                # Determine which ports this operation receives
+                if show_ports and func:
+                    if self._optimize_ports:
+                        # With optimization: only ports the operation needs
+                        needed_ports = self._analyze_operation_metadata_usage(func, None)
+                        if needed_ports:
+                            op_ports = current_ports & needed_ports
+                        else:
+                            op_ports = current_ports.copy()
+                    else:
+                        # Without optimization: all ports flow through
+                        op_ports = current_ports.copy()
+                    
+                    # Add 'data' port if it exists (common case)
+                    if 'data' not in current_ports and idx == 0:
+                        current_ports.add('data')
+                        op_ports.add('data')
+                else:
+                    op_ports = current_ports.copy()
+                
                 if branch:
                     # Operation on a specific branch
                     if branch in branch_nodes:
-                        lines.append(f"    {branch_nodes[branch]} -.-> |{branch}| {node_name}")
+                        br_node, br_ports = branch_nodes[branch]
+                        if show_ports and br_ports:
+                            port_str = ', '.join(sorted(br_ports))
+                            lines.append(f"    {br_node} -.{port_str}.-> |{branch}| {node_name}")
+                        else:
+                            lines.append(f"    {br_node} -.-> |{branch}| {node_name}")
+                        branch_nodes[branch] = (node_name, op_ports)
                     else:
-                        lines.append(f"    {prev_node} -.-> |{branch}| {node_name}")
-                    branch_nodes[branch] = node_name
+                        if show_ports and op_ports:
+                            port_str = ', '.join(sorted(op_ports))
+                            lines.append(f"    {prev_node} -.{port_str}.-> |{branch}| {node_name}")
+                        else:
+                            lines.append(f"    {prev_node} -.-> |{branch}| {node_name}")
+                        branch_nodes[branch] = (node_name, op_ports)
                 else:
                     # Operation on main path
-                    lines.append(f"    {prev_node} --> {node_name}")
+                    if show_ports and op_ports:
+                        port_str = ', '.join(sorted(op_ports))
+                        lines.append(f"    {prev_node} --|{port_str}|--> {node_name}")
+                    else:
+                        lines.append(f"    {prev_node} --> {node_name}")
                     prev_node = node_name
+                    
+                    # Update current_ports based on what the operation produces
+                    # This is approximate - operations can add/modify ports
+                    current_ports = op_ports.copy()
         
         # End node
         lines.append("    end_node([End])")
-        lines.append(f"    {prev_node} --> end_node")
+        if show_ports and current_ports:
+            port_str = ', '.join(sorted(current_ports))
+            lines.append(f"    {prev_node} --|{port_str}|--> end_node")
+        else:
+            lines.append(f"    {prev_node} --> end_node")
         lines.append("```")
         
         return '\n'.join(lines)
