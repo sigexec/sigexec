@@ -10,7 +10,7 @@ import plotly.graph_objects as go
 import plotly.express as px
 from plotly.subplots import make_subplots
 from typing import Optional, Tuple
-from sigexec.core.data import SignalData
+from sigexec.core.data import GraphData as SignalData
 
 
 def plot_timeseries(

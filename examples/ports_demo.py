@@ -12,6 +12,47 @@ from sigexec import GraphData, Graph
 def main():
     print("=" * 70)
     print("Port-Based Data Flow Demo")
+
+
+def create_dashboard() -> 'sd.Dashboard':
+    """Create a minimal staticdash dashboard for the ports demo."""
+    try:
+        import staticdash as sd
+    except Exception:
+        raise
+
+    from sigexec.diagnostics import plot_timeseries
+
+    dashboard = sd.Dashboard('Ports Demo')
+    page = sd.Page('ports', 'Ports Demo')
+
+    # Simple example: generate and scale signal
+    t = np.linspace(0, 1, 200)
+    signal = np.sin(2 * np.pi * 10 * t)
+
+    gdata = GraphData()
+    gdata.signal = signal
+    gdata.sample_rate = 100.0
+
+    # Run scaling operation
+    def scale_signal(gdata: GraphData) -> GraphData:
+        signal = gdata.signal
+        sr = gdata.sample_rate
+        gdata.signal = signal * sr
+        return gdata
+
+    result = Graph().add(lambda g: g).add(scale_signal).run(gdata)
+
+    page.add_header('Port-based data flow', level=1)
+    page.add_text('Demonstrates basic port read/write and a scaled signal')
+
+    page.add_text('Original signal:')
+    page.add_plot(plot_timeseries(SignalData(data=signal, metadata={'sample_rate':100.0}), title='Original'))
+    page.add_text('Scaled signal:')
+    page.add_plot(plot_timeseries(SignalData(data=result.signal, metadata={'sample_rate':100.0}), title='Scaled'))
+
+    dashboard.add_page(page)
+    return dashboard
     print("=" * 70)
     print()
     

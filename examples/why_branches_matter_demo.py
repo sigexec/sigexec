@@ -111,6 +111,57 @@ def demo_with_branches_solution():
 
 def demo_practical_radar_example():
     """Real-world radar processing with multiple window types."""
+
+
+def create_dashboard() -> 'sd.Dashboard':
+    """Create a minimal staticdash dashboard showing why branches matter."""
+    try:
+        import staticdash as sd
+    except Exception:
+        raise
+
+    from sigexec.diagnostics import plot_pulse_matrix
+
+    dashboard = sd.Dashboard('Why Branches Matter')
+    page = sd.Page('why-branches-matter', 'Why Branches Matter')
+
+    # Use the radar window comparison pipeline from the demo
+    from sigexec.blocks import LFMGenerator, StackPulses, RangeCompress, DopplerCompress
+
+    graph = (Graph("Radar Window Comparison")
+        .add(LFMGenerator(), name="Generate LFM")
+        .add(StackPulses(), name="Stack Pulses")
+        .add(RangeCompress(), name="Range FFT")
+        .branch(["hann", "hamming", "blackman"])
+        .add(DopplerCompress(window='hann'), branch="hann")
+        .add(DopplerCompress(window='hamming'), branch="hamming")
+        .add(DopplerCompress(window='blackman'), branch="blackman")
+        .merge(lambda branches: GraphData()) )
+
+    # Run graph to collect branch outputs individually
+    # We will run the doppler steps individually to get branch pulse matrices
+    base = (Graph().add(LFMGenerator()).add(StackPulses()).add(RangeCompress()))
+    base_result = base.run(GraphData())
+
+    # Generate doppler maps for each window
+    hann = Graph().input_data(base_result).add(DopplerCompress(window='hann')).run()
+    hamming = Graph().input_data(base_result).add(DopplerCompress(window='hamming')).run()
+    blackman = Graph().input_data(base_result).add(DopplerCompress(window='blackman')).run()
+
+    page.add_header('Window Comparison (Range-Doppler Maps)', level=1)
+    page.add_text('Compare range-doppler maps produced with different window functions')
+
+    page.add_text('Hann window:')
+    page.add_plot(plot_pulse_matrix(hann, title='Hann Window'))
+
+    page.add_text('Hamming window:')
+    page.add_plot(plot_pulse_matrix(hamming, title='Hamming Window'))
+
+    page.add_text('Blackman window:')
+    page.add_plot(plot_pulse_matrix(blackman, title='Blackman Window'))
+
+    dashboard.add_page(page)
+    return dashboard
     print("=" * 70)
     print("PRACTICAL EXAMPLE: Comparing window functions in radar processing")
     print("=" * 70)
