@@ -310,20 +310,34 @@ All ports flow through every operation (wasteful):
 
 ````markdown
 ```mermaid
-flowchart LR
-    source([source]) --|a, b|--> use_a
-    use_a[use_a] --|a, b, result_a|--> use_b
-    use_b[use_b] --|a, b, result_a, result_b|--> combine
-    combine[combine] --> final([final])
+flowchart TD
+    start([Start])
+    source[source]
+    start --> source
+    use_a[use_a]
+    source -- a, b --> use_a
+    use_b[use_b]
+    use_a -- a, b, result_a --> use_b
+    combine[combine]
+    use_b -- a, b, result_a, result_b --> combine
+    end_node([End])
+    combine --> end_node
 ```
 ````
 
 ```mermaid
-flowchart LR
-    source([source]) --|a, b|--> use_a
-    use_a[use_a] --|a, b, result_a|--> use_b
-    use_b[use_b] --|a, b, result_a, result_b|--> combine
-    combine[combine] --> final([final])
+flowchart TD
+    start([Start])
+    source[source]
+    start --> source
+    use_a[use_a]
+    source -- a, b --> use_a
+    use_b[use_b]
+    use_a -- a, b, result_a --> use_b
+    combine[combine]
+    use_b -- a, b, result_a, result_b --> combine
+    end_node([End])
+    combine --> end_node
 ```
 
 - `use_a` receives `[a, b]` but only uses `a` ❌
@@ -336,33 +350,43 @@ Only needed ports flow (efficient):
 
 ````markdown
 ```mermaid
-flowchart LR
-    source([source]) --|a|--> use_a
-    source -.b.-> use_b
-    use_a[use_a] --|result_a|--> combine
-    use_a -.b.-> use_b
-    use_b[use_b] --|b, result_b|--> combine
-    use_b -.result_a.-> combine
-    combine[combine] --> final([final])
+flowchart TD
+    start([Start])
+    source[source]
+    start --> source
+    use_a[use_a]
+    source -- a --> use_a
+    source -- b --> use_b
+    use_b[use_b]
+    combine[combine]
+    use_a -- result_a --> combine
+    use_b -- result_b --> combine
+    end_node([End])
+    combine --> end_node
 ```
 ````
 
 ```mermaid
-flowchart LR
-    source([source]) --|a|--> use_a
-    source -.b.-> use_b
-    use_a[use_a] --|result_a|--> combine
-    use_a -.b.-> use_b
-    use_b[use_b] --|b, result_b|--> combine
-    use_b -.result_a.-> combine
-    combine[combine] --> final([final])
+flowchart TD
+    start([Start])
+    source[source]
+    start --> source
+    use_a[use_a]
+    source -- a --> use_a
+    source -- b --> use_b
+    use_b[use_b]
+    combine[combine]
+    use_a -- result_a --> combine
+    use_b -- result_b --> combine
+    end_node([End])
+    combine --> end_node
 ```
 
-- `use_a` receives ONLY `[a]` ✓ (solid line)
-- Port `b` bypasses `use_a` (dotted line) ✓
-- `use_b` receives ONLY `[b]` ✓ (solid line)
-- Ports `a` and `result_a` bypass `use_b` (dotted lines) ✓
-- `combine` receives all needed ports ✓
+- `use_a` receives ONLY `[a]` ✓
+- Port `b` bypasses `use_a` (goes directly from `source` to `use_b`) ✓
+- `use_b` receives ONLY `[b]` ✓
+- Ports `a` and `result_a` bypass `use_b` (go directly to `combine`) ✓
+- `combine` receives all needed ports `[result_a, result_b]` ✓
 
 **Key:**
 - **Solid arrows (-->)**: Ports that flow to and are used by the operation
