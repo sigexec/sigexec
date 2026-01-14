@@ -7,7 +7,7 @@ They implement radar signal processing but are not core to the framework itself.
 Users are encouraged to create their own custom blocks for their specific domains
 (audio, medical imaging, communications, etc.). See docs/CUSTOM_BLOCKS.md for guidance.
 
-The framework (SignalData, Graph) is in sigexec.core and is designed to be 
+The framework (GraphData, Graph) is in sigexec.core and is designed to be 
 minimal and domain-agnostic.
 """
 
