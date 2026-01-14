@@ -80,20 +80,27 @@ if need_to_check_range_compression:
     # Actually run this demo
     page.add_header("Live Example: Intermediate Results", level=3)
     
-    graph = (Graph("IntermediateDemo")
-        .add(LFMGenerator(
+    # Run the generator stages first to ensure required ports (e.g., reference_pulse)
+    base = Graph().add(LFMGenerator(
             num_pulses=32,
             target_delay=2e-6,
             target_doppler=200.0,
             noise_power=0.01,
-        ))
-        .add(StackPulses())
+        )).add(StackPulses())
+
+    # Run base stages and collect their intermediates so we have full-stage history
+    base_result = base.run(save_intermediate=True)
+    base_intermediates = base.get_intermediate_results()
+
+    graph = (Graph("IntermediateDemo")
+        .input_data(base_result)
         .add(RangeCompress(window='hamming', oversample_factor=2))
         .add(DopplerCompress(window='hann', oversample_factor=2))
     )
-    
+
     result = graph.run(save_intermediate=True)
-    intermediates = graph.get_intermediate_results()
+    # Combine base + later intermediates so indices match the original expectations
+    intermediates = base_intermediates + graph.get_intermediate_results()
     
     # Plot selected stages
     fig1 = plot_pulse_matrix(intermediates[1], title="After Stacking", height=400)

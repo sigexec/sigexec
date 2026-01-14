@@ -30,15 +30,14 @@ def create_dashboard() -> 'sd.Dashboard':
     t = np.linspace(0, 1, 200)
     signal = np.sin(2 * np.pi * 10 * t)
 
-    gdata = GraphData()
-    gdata.signal = signal
-    gdata.sample_rate = 100.0
+    # Use canonical 'data' port when appropriate
+    gdata = GraphData(data=signal, sample_rate=100.0)
 
     # Run scaling operation
     def scale_signal(gdata: GraphData) -> GraphData:
-        signal = gdata.signal
+        data = gdata.data
         sr = gdata.sample_rate
-        gdata.signal = signal * sr
+        gdata.data = data * sr
         return gdata
 
     result = Graph().add(lambda g: g).add(scale_signal).run(gdata)
@@ -47,9 +46,9 @@ def create_dashboard() -> 'sd.Dashboard':
     page.add_text('Demonstrates basic port read/write and a scaled signal')
 
     page.add_text('Original signal:')
-    page.add_plot(plot_timeseries(SignalData(data=signal, metadata={'sample_rate':100.0}), title='Original'))
+    page.add_plot(plot_timeseries(GraphData(data=signal, sample_rate=100.0), title='Original'))
     page.add_text('Scaled signal:')
-    page.add_plot(plot_timeseries(SignalData(data=result.signal, metadata={'sample_rate':100.0}), title='Scaled'))
+    page.add_plot(plot_timeseries(GraphData(data=result.data, sample_rate=100.0), title='Scaled'))
 
     dashboard.add_page(page)
     return dashboard

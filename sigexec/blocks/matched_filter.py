@@ -24,35 +24,14 @@ class RangeCompress:
         If oversample_factor > 1, uses FFT-based processing with zero-padding.
         Otherwise uses time-domain correlation.
         """
-        # Support both 'data' and legacy 'signal' port names
-        if gdata.has_port('data'):
-            data = gdata.data
-        elif gdata.has_port('signal'):
-            data = gdata.signal
-        else:
-            raise AttributeError(
-                f"Port 'data' not found. Available ports: {list(gdata.ports.keys())}"
-            )
+        # Read primary signal from the canonical 'data' port
+        data = gdata.data
 
-        # Ensure data is 2D (num_pulses x num_samples)
-        if hasattr(data, 'ndim') and data.ndim == 1:
-            data = data.reshape(1, -1)
-
-        if hasattr(data, 'shape') and len(data.shape) == 2:
-            num_pulses, num_samples = data.shape
-        else:
-            raise ValueError("Input data must be a 2D array of shape (num_pulses, num_samples)")
-
-        # If reference_pulse is missing, try to infer a reasonable default from the data
+        # Expect reference_pulse to be provided explicitly
         if not gdata.has_port('reference_pulse'):
-            import warnings
-            warnings.warn("Port 'reference_pulse' not found; inferring reference pulse from data")
-            # Use the central portion of the first pulse as a crude reference
-            pulse_length = min(64, max(1, num_samples // 8))
-            start = max(0, num_samples // 2 - pulse_length // 2)
-            reference_pulse = data[0, start:start + pulse_length]
-        else:
-            reference_pulse = gdata.reference_pulse
+            raise ValueError("Port 'reference_pulse' is required")
+
+        reference_pulse = gdata.reference_pulse
         
         # Apply window to reference pulse if specified
         if self.window is not None and self.window.lower() != 'none':

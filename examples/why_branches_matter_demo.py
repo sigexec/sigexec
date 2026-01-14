@@ -140,13 +140,14 @@ def create_dashboard() -> 'sd.Dashboard':
 
     # Run graph to collect branch outputs individually
     # We will run the doppler steps individually to get branch pulse matrices
-    base = (Graph().add(LFMGenerator()).add(StackPulses()).add(RangeCompress()))
-    base_result = base.run(GraphData())
+    # Run generator stages first to ensure reference_pulse is available
+    base = Graph().add(LFMGenerator()).add(StackPulses())
+    base_result = base.run()
 
-    # Generate doppler maps for each window
-    hann = Graph().input_data(base_result).add(DopplerCompress(window='hann')).run()
-    hamming = Graph().input_data(base_result).add(DopplerCompress(window='hamming')).run()
-    blackman = Graph().input_data(base_result).add(DopplerCompress(window='blackman')).run()
+    # Now apply range compression + doppler for each window using the generated base
+    hann = Graph().input_data(base_result).add(RangeCompress()).add(DopplerCompress(window='hann')).run()
+    hamming = Graph().input_data(base_result).add(RangeCompress()).add(DopplerCompress(window='hamming')).run()
+    blackman = Graph().input_data(base_result).add(RangeCompress()).add(DopplerCompress(window='blackman')).run()
 
     page.add_header('Window Comparison (Range-Doppler Maps)', level=1)
     page.add_text('Compare range-doppler maps produced with different window functions')
