@@ -270,68 +270,9 @@ graph.visualize("variants_flow.md")
 
 **By default** (`optimize_ports=True`), operations only receive the ports they actually use. Unused ports "bypass" operations entirely, improving memory efficiency and making data flow explicit.
 
-#### Visual Comparison
+#### Example: Simple Linear Pipeline
 
-Here's how port flow differs between the two modes:
-
-**WITHOUT Port Optimization (`optimize_ports=False`):**
-
-All ports flow through every operation (solid arrows everywhere):
-
-````markdown
-```mermaid
-flowchart LR
-    source([source]) --|a, b|--> use_a
-    use_a[use_a] --|a, b, result_a|--> use_b
-    use_b[use_b] --|a, b, result_a, result_b|--> combine
-    combine[combine] --> final([final])
-```
-````
-
-```mermaid
-flowchart LR
-    source([source]) --|a, b|--> use_a
-    use_a[use_a] --|a, b, result_a|--> use_b
-    use_b[use_b] --|a, b, result_a, result_b|--> combine
-    combine[combine] --> final([final])
-```
-
-❌ Port `b` unnecessarily flows through `use_a` (which only needs `a`)  
-❌ Ports `a` and `result_a` unnecessarily flow through `use_b` (which only needs `b`)
-
-**WITH Port Optimization (`optimize_ports=True` - Default):**
-
-Only needed ports flow to each operation (solid arrows). Unused ports bypass (dotted arrows):
-
-````markdown
-```mermaid
-flowchart LR
-    source([source]) --|a|--> use_a
-    source -.b bypasses use_a.-> use_b
-    use_a[use_a] --|result_a|--> combine
-    use_a -.b continues.-> use_b
-    use_b[use_b] --|b, result_b|--> combine
-    use_b -.result_a bypasses.-> combine
-    combine[combine] --> final([final])
-```
-````
-
-```mermaid
-flowchart LR
-    source([source]) --|a|--> use_a
-    source -.b bypasses use_a.-> use_b
-    use_a[use_a] --|result_a|--> combine
-    use_a -.b continues.-> use_b
-    use_b[use_b] --|b, result_b|--> combine
-    use_b -.result_a bypasses.-> combine
-    combine[combine] --> final([final])
-```
-
-✓ Port `b` bypasses `use_a` (shown as dotted line)  
-✓ Ports `a` and `result_a` bypass `use_b` (shown as dotted lines)  
-✓ All ports converge at `combine` which needs everything
-
-#### Code Example
+Here's a graph that demonstrates port optimization:
 
 ```python
 from sigexec import Graph, GraphData, requires_ports
@@ -347,13 +288,86 @@ def use_b(g):
     g.result_b = g.b * 3
     return g
 
-# With optimize_ports=True (default):
-# - use_a receives ONLY 'a' (b bypasses it)
-# - use_b receives ONLY 'b' (a, result_a bypass it)
-graph = Graph()  # optimize_ports=True by default
+@requires_ports('result_a', 'result_b')
+def combine(g):
+    g.final = g.result_a + g.result_b
+    return g
 
-# To disable optimization (old behavior - all ports flow everywhere):
-graph_unoptimized = Graph(optimize_ports=False)
+def source(g):
+    g.a = 10
+    g.b = 20
+    return g
+
+# Create graph
+graph = (Graph("Port Demo")
+    .add(source, name='source')
+    .add(use_a, name='use_a')
+    .add(use_b, name='use_b')
+    .add(combine, name='combine'))
+```
+
+#### Graph Structure
+
+Both optimization modes produce the same graph structure:
+
+````markdown
+```mermaid
+flowchart TD
+    start([Start])
+    node1[source]
+    start --> node1
+    node2[use_a]
+    node1 --> node2
+    node3[use_b]
+    node2 --> node3
+    node4[combine]
+    node3 --> node4
+    end_node([End])
+    node4 --> end_node
+```
+````
+
+```mermaid
+flowchart TD
+    start([Start])
+    node1[source]
+    start --> node1
+    node2[use_a]
+    node1 --> node2
+    node3[use_b]
+    node2 --> node3
+    node4[combine]
+    node3 --> node4
+    end_node([End])
+    node4 --> end_node
+```
+
+#### Port Flow Behavior
+
+While the graph structure looks the same, the **port flow** differs:
+
+**WITHOUT Port Optimization (`optimize_ports=False`):**
+- `source` creates ports `[a, b]`
+- `use_a` receives `[a, b]` but only uses `a` ❌ (port `b` unnecessarily copied)
+- `use_b` receives `[a, b, result_a]` but only uses `b` ❌ (ports `a`, `result_a` unnecessarily copied)
+- `combine` receives all ports ✓
+
+**WITH Port Optimization (`optimize_ports=True` - Default):**
+- `source` creates ports `[a, b]`
+- `use_a` receives ONLY `[a]` ✓ (port `b` bypasses)
+- `use_b` receives ONLY `[b]` ✓ (ports `a`, `result_a` bypass)
+- `combine` receives all accumulated ports `[result_a, result_b]` ✓
+
+Run with `verbose=True` to see the actual port flow:
+
+```python
+# Without optimization - see all ports copied everywhere
+graph_unopt = Graph("Demo", optimize_ports=False).add(source)...
+result = graph_unopt.run(GraphData(), verbose=True)
+
+# With optimization (default) - see only needed ports flow
+graph_opt = Graph("Demo").add(source)...  # optimize_ports=True by default
+result = graph_opt.run(GraphData(), verbose=True)
 ```
 
 **Benefits of port optimization:**

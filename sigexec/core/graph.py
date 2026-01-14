@@ -973,6 +973,87 @@ class Graph:
         if variant_ops > 0:
             return f"Graph('{self.name}'{cache_status}, ops={num_ops}, variants={variant_ops})"
         return f"Graph('{self.name}'{cache_status}, ops={num_ops})"
+    
+    def to_mermaid(self) -> str:
+        """
+        Generate a Mermaid flowchart diagram of the graph structure.
+        
+        Returns:
+            String containing Mermaid diagram syntax
+        """
+        lines = ["```mermaid", "flowchart TD"]
+        lines.append("    start([Start])")
+        
+        # Track node IDs
+        node_id = 0
+        prev_node = "start"
+        branch_nodes = {}  # branch_name -> last_node_id
+        
+        for idx, op in enumerate(self.operations):
+            node_id += 1
+            op_type = op.get('type', 'operation')
+            name = op.get('name', f'Op{idx}')
+            branch = op.get('branch')
+            
+            if op_type == 'branch':
+                # Branch point - create multiple branch paths
+                branches = op.get('branches', [])
+                for br in branches:
+                    branch_nodes[br] = prev_node
+            elif op_type == 'merge':
+                # Merge point - combine branches
+                node_name = f"node{node_id}"
+                lines.append(f"    {node_name}[{name}]")
+                
+                # Connect from all branches being merged
+                merge_branches = op.get('branches', list(branch_nodes.keys()))
+                for br in merge_branches:
+                    if br in branch_nodes:
+                        lines.append(f"    {branch_nodes[br]} -.-> |{br}| {node_name}")
+                
+                prev_node = node_name
+                branch_nodes = {}  # Reset branches after merge
+            elif op_type == 'variants':
+                # Variant node
+                node_name = f"node{node_id}"
+                variant_names = ', '.join(op['variant_spec']['names'])
+                lines.append(f"    {node_name}[/Variant: {variant_names}/]")
+                lines.append(f"    {prev_node} --> {node_name}")
+                prev_node = node_name
+            else:
+                # Regular operation
+                node_name = f"node{node_id}"
+                lines.append(f"    {node_name}[{name}]")
+                
+                if branch:
+                    # Operation on a specific branch
+                    if branch in branch_nodes:
+                        lines.append(f"    {branch_nodes[branch]} -.-> |{branch}| {node_name}")
+                    else:
+                        lines.append(f"    {prev_node} -.-> |{branch}| {node_name}")
+                    branch_nodes[branch] = node_name
+                else:
+                    # Operation on main path
+                    lines.append(f"    {prev_node} --> {node_name}")
+                    prev_node = node_name
+        
+        # End node
+        lines.append("    end_node([End])")
+        lines.append(f"    {prev_node} --> end_node")
+        lines.append("```")
+        
+        return '\n'.join(lines)
+    
+    def visualize(self, filename: str) -> None:
+        """
+        Save a Mermaid visualization of the graph to a file.
+        
+        Args:
+            filename: Path to save the Mermaid diagram
+        """
+        mermaid = self.to_mermaid()
+        with open(filename, 'w') as f:
+            f.write(mermaid + '\n')
 
 
 def create_graph(
