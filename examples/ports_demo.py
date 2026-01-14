@@ -111,23 +111,23 @@ def create_dashboard() -> 'sd.Dashboard':
     # ------------------------------------------------------------------
     # Decorator usage example (explicit contract)
     # ------------------------------------------------------------------
-    page.add_header('Decorator example: @PortAnalyzer.requires_ports', level=2)
+    page.add_header('Decorator example: @requires_ports', level=2)
     page.add_text(
         'You can explicitly declare required ports for a stage using the decorator: '
-        '`@PortAnalyzer.requires_ports("a", "b")`. This is deterministic and avoids '
+        '`@requires_ports("a", "b")`. This is deterministic and avoids '
         'runtime instrumentation. Strict mode will raise if the stage accesses '
         'undeclared ports.'
     )
 
-    from sigexec.core.port_optimizer import PortAnalyzer
+    from sigexec import requires_ports
 
-    @PortAnalyzer.requires_ports('a')
+    @requires_ports('a')
     def declared_op(g: GraphData) -> GraphData:
         """Declared operation that only needs 'a'."""
         g.a_out = g.a + 99
         return g
 
-    @PortAnalyzer.requires_ports('a')
+    @requires_ports('a')
     def declared_bad(g: GraphData) -> GraphData:
         """Declared to need only 'a' but attempts to read 'b' (should fail in strict mode)."""
         # Using .get will be intercepted by strict-mode enforcement

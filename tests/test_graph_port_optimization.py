@@ -1,7 +1,5 @@
 import logging
-from sigexec.core.data import GraphData
-from sigexec.core.graph import Graph
-from sigexec.core.port_optimizer import PortAnalyzer
+from sigexec import Graph, GraphData
 
 
 def op_a_min(g):

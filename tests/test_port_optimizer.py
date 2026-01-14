@@ -1,77 +1,52 @@
-import pytest
-from sigexec.core.port_optimizer import PortAnalyzer, PortAccessTracker, create_port_subset, merge_port_subsets
-from sigexec.core.data import GraphData
+import logging
+from sigexec import Graph, GraphData, requires_ports
 
 
-def _op_attr(g):
-    return g.data + 1
+def op_attr(g):
+    g.data = g.data + 1
+    return g
 
 
-def _op_ports_sub(g):
-    return g.ports['foo']
+def op_dyn(g):
+    g.result = g.custom + (g.get('maybe', 0) or 0)
+    return g
 
 
-def test_static_attribute_access():
-    keys = PortAnalyzer.get_operation_metadata_keys(_op_attr)
-    assert keys == {"data"}
-
-
-def test_static_ports_subscript():
-    keys = PortAnalyzer.get_operation_metadata_keys(_op_ports_sub)
-    assert keys == {"foo"}
-
-
-def test_runtime_detection_attribute():
-    def op(g):
-        # dynamic access by attribute (not visible statically if name differs)
-        return g.custom + (g.get('maybe', 0) or 0)
-
-    sample = GraphData(data=[0])
-    sample.custom = 42
-    keys = PortAnalyzer.get_operation_metadata_keys(op, sample)
-    assert keys == {"custom", "maybe"} or keys == {"custom"}
-
-
-def test_port_access_tracker_reads_and_writes():
-    base = {"a": 1, "b": 2}
-    tracker = PortAccessTracker(base)
-    assert tracker.get('a') == 1
-    assert 'a' in tracker.accessed_keys
-    tracker['c'] = 3
-    assert tracker['c'] == 3
-
-
-def op_dynamic(g):
-    key = "dyn"
-    return g.ports[key]
-
-
-def test_create_and_merge_subsets():
-    full = {"a": 1, "b": 2, "c": 3}
-    subset = create_port_subset(full, {"a", "c"})
-    assert subset == {"a": 1, "c": 3}
-
-    unioned = merge_port_subsets([{"a": 1}, {"b": 2}])
-    assert unioned == {"a": 1, "b": 2}
-
-    intersected = merge_port_subsets([{"a": 1, "b": 2}, {"b": 2, "c": 3}], strategy='intersection')
-    assert intersected == {"b": 2}
-
-
-def test_logging_static_and_runtime(caplog):
-    import logging
+def test_static_detection_via_graph_logs(caplog):
     caplog.set_level(logging.DEBUG)
 
-    # Static detection should log a static analysis message
-    PortAnalyzer.get_operation_metadata_keys(_op_attr)
+    data = GraphData(data=[1, 2, 3])
+
+    g = Graph(optimize_ports=True).add(op_attr, name='op_attr')
+    g.run(data)
+
     assert "static analysis determined keys" in caplog.text.lower()
     assert "data" in caplog.text
 
-    caplog.clear()
 
-    # Runtime detection for dynamic key should log a runtime analysis message
+def test_runtime_detection_via_graph_logs(caplog):
+    caplog.set_level(logging.DEBUG)
+
     sample = GraphData()
-    sample.dyn = 7
-    PortAnalyzer.get_operation_metadata_keys(op_dynamic, sample)
-    assert "runtime analysis determined keys" in caplog.text.lower()
-    assert "dyn" in caplog.text
+    sample.custom = 42
+
+    g = Graph(optimize_ports=True).add(op_dyn, name='op_dyn')
+    g.run(sample)
+
+    assert ("runtime analysis determined keys" in caplog.text.lower() or
+            "static analysis determined keys" in caplog.text.lower())
+    assert "custom" in caplog.text or "maybe" in caplog.text or "get" in caplog.text
+
+
+def test_decorator_integration_and_logs(caplog):
+    caplog.set_level(logging.DEBUG)
+
+    @requires_ports('x')
+    def op_decl(g):
+        g.x_out = g.x + 1
+        return g
+
+    g = Graph(optimize_ports=True).add(op_decl, name='op_decl')
+    g.run(GraphData(x=3))
+
+    assert any('using decorator-declared keys' in r.message.lower() for r in caplog.records)

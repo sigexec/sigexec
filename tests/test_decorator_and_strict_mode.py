@@ -1,27 +1,26 @@
 import pytest
 import logging
-from sigexec.core.port_optimizer import PortAnalyzer
-from sigexec.core.data import GraphData
-from sigexec.core.graph import Graph
+from sigexec import requires_ports, GraphData, Graph
 
 
 def test_decorator_precedence_and_logging(caplog):
     caplog.set_level(logging.DEBUG)
 
-    @PortAnalyzer.requires_ports('a')
+    @requires_ports('a')
     def op_declared(g):
         # Access declared port
-        return g.a + 1
+        g.a_out = g.a + 1
+        return g
 
-    # Analyzer should pick up decorator and not do static/runtime analysis
-    keys = PortAnalyzer.get_operation_metadata_keys(op_declared, GraphData())
-    assert keys == {'a'}
+    # Analyzer should pick up decorator and we should see a log entry when running
+    g = Graph(optimize_ports=True).add(op_declared, name='op_declared')
+    g.run(GraphData(a=1))
     assert any('using decorator-declared keys' in r.message.lower() for r in caplog.records)
 
 
 def test_strict_mode_raises_on_undeclared_access():
     # Function declares only 'a' but tries to access 'b' via get()
-    @PortAnalyzer.requires_ports('a')
+    @requires_ports('a')
     def op_bad(g):
         # Access declared port
         _ = g.a
@@ -43,7 +42,7 @@ def test_strict_mode_raises_on_undeclared_access():
 
 
 def test_decorator_allows_minimal_passing_when_not_strict():
-    @PortAnalyzer.requires_ports('a')
+    @requires_ports('a')
     def op_ok(g):
         # Should be fine accessing a only
         assert hasattr(g, 'a')
