@@ -106,7 +106,7 @@ result = (Graph("CustomDemo")
     # Build graph with custom blocks
     page.add_header("Graph Execution", level=2)
     
-    result = (Graph("CustomDemo")
+    result = (Graph("CustomDemo", optimize_ports=False)
         .add(LFMGenerator(num_pulses=32, target_delay=5e-6, noise_power=0.1), name="Generate")
         .tap(lambda s: page.add_header("Stage 1: Generated Signal", level=2))
         .tap(lambda s: page.add_plot(plot_timeseries(s, title="Original LFM Signal", 

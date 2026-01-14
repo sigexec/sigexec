@@ -279,7 +279,7 @@ for params, result in results:
         return load
     
     # Combine lazy loading with processing variants
-    combined_results = (Graph()
+    combined_results = (Graph(optimize_ports=False)
         .variants(make_file_loader, [file_a, file_b], names=['Target 1', 'Target 2'])
         .add(StackPulses())
         .variants(lambda w: RangeCompress(window=w, oversample_factor=2), 

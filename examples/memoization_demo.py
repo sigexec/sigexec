@@ -80,7 +80,7 @@ def create_dashboard() -> sd.Dashboard:
         .add(expensive_preprocessing(0.15), name="Preprocess")
         .variant(lambda f: cheap_operation("variant", f), [1.0, 1.5, 2.0], names=["x1.0", "x1.5", "x2.0"]))
     
-    page.add_code(example_graph.to_mermaid(), language='mermaid')
+    page.add_syntax(example_graph.to_mermaid(), language='mermaid')
     page.add_text("""
     The diagram above shows how the expensive operations (Load_Data, Preprocess) are shared
     across all variants, while only the cheap variant operation differs.

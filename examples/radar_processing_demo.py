@@ -76,7 +76,7 @@ def create_dashboard(
         .add(RangeCompress(), name="Range_Compress")
         .add(DopplerCompress(), name="Doppler_Compress"))
     
-    page.add_code(demo_graph.to_mermaid(), language='mermaid')
+    page.add_syntax(demo_graph.to_mermaid(), language='mermaid')
     page.add_text("""
     Each box represents a processing stage. The graph is executed sequentially,
     with each stage transforming the signal data.

@@ -334,6 +334,10 @@ result = graph.run(GraphData())
         result.data = np.mean(arrays, axis=0)
         result.set('merged_from', list(branches.keys()))
         result.set('num_branches', len(branches))
+        # Store individual branch data for display
+        result.set('branch_a_data', branches['a'].data)
+        result.set('branch_b_data', branches['b'].data)
+        result.set('branch_c_data', branches['c'].data)
         return result
     
     graph2 = (Graph("Filter Averaging")
@@ -349,10 +353,10 @@ result = graph.run(GraphData())
     demo2_results = {
         'Branch': ['a (0.3x)', 'b (0.5x)', 'c (0.7x)', 'Average'],
         'Data': [
-            ', '.join([f'{x:.2f}' for x in branches['a'].data]),
-            ', '.join([f'{x:.2f}' for x in branches['b'].data]),
-            ', '.join([f'{x:.2f}' for x in branches['c'].data]),
-            ', '.join([f'{x:.2f}' for x in branches['a'].data])
+            ', '.join([f'{x:.2f}' for x in result2.get('branch_a_data')]),
+            ', '.join([f'{x:.2f}' for x in result2.get('branch_b_data')]),
+            ', '.join([f'{x:.2f}' for x in result2.get('branch_c_data')]),
+            ', '.join([f'{x:.2f}' for x in result2.data])
         ]
     }
     
