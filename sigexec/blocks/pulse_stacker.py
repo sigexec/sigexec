@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 import numpy as np
-from ..core.data import SignalData
+from ..core.data import GraphData
 
 
 @dataclass
@@ -14,18 +14,15 @@ class StackPulses:
     for subsequent range-Doppler processing.
     """
     
-    def __call__(self, signal_data: SignalData) -> SignalData:
+    def __call__(self, gdata: GraphData) -> GraphData:
         """Stack pulses into 2D matrix."""
-        if signal_data.data.ndim == 1:
-            data = signal_data.data.reshape(1, -1)
+        if gdata.data.ndim == 1:
+            data = gdata.data.reshape(1, -1)
         else:
-            data = signal_data.data
+            data = gdata.data
         
-        metadata = signal_data.metadata.copy()
-        metadata['pulse_stacked'] = True
-        metadata['shape_after_stacking'] = data.shape
+        gdata.data = data
+        gdata.pulse_stacked = True
+        gdata.shape_after_stacking = data.shape
         
-        return SignalData(
-            data=data,
-            metadata=metadata
-        )
+        return gdata

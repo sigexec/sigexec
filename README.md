@@ -1,24 +1,22 @@
 # SigExec - Signal Processing Chain Framework
 
-A Python framework for building signal processing graphs with functional dataclass blocks and fluent APIs.
+A Python framework for building signal processing graphs with port-based data flow and parameter exploration.
 
 **SigExec provides the framework - you bring the blocks!** The included radar processing blocks are examples showing how to use the framework. You can easily create your own custom blocks for any signal processing application.
 
 ## Quick Links
 
-- **Custom Blocks Guide** - [docs/CUSTOM_BLOCKS.md](docs/CUSTOM_BLOCKS.md)  
-- **Plugin Reference** - [docs/PLUGIN_REFERENCE.md](docs/PLUGIN_REFERENCE.md)  
-- **Architecture Overview** - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)  
-- **Interactive Demos** - [https://briday1.github.io/sigexec/](https://briday1.github.io/sigexec/)
+- **GitHub Pages** - [https://sigexec.github.io/sigexec/](https://sigexec.github.io/sigexec/)
 
 ## Features
 
-- **Clean Graph Architecture**: Build graphs where a single object (SignalData) flows through processing stages
+- **Port-Based Data Flow**: Natural data flow through named ports - operations read/write exactly what they need
 - **Data Class Blocks**: Type-safe, composable processing blocks using Python dataclasses
+- **Parameter Exploration**: Built-in support for exploring parameter combinations with `.variant()`
+- **Graph Visualization**: Visualize operation sequences and variant combinations
 - **Extensible**: Create custom blocks as simple dataclasses - no complex interfaces required
 - **Functional Composition**: Chain operations naturally with consistent input/output types
-- **Flexible API**: Multiple usage patterns from explicit chaining to graph builders
-- **Example Application**: Complete radar processing graph demonstrating:
+- **Example Application**: Complete radar processing demonstrating:
   - LFM signal generation with delay and Doppler shift
   - Pulse stacking
   - Matched filtering (range compression)
@@ -50,6 +48,12 @@ The cleanest approach where each block is a configured data class:
 
 ```python
 from sigexec.blocks import LFMGenerator, StackPulses, RangeCompress, DopplerCompress
+### Simplest Example - Direct Chaining
+
+The cleanest approach where each block is a configured data class:
+
+```python
+from sigexec.blocks import LFMGenerator, StackPulses, RangeCompress, DopplerCompress
 
 # Configure blocks
 gen = LFMGenerator(num_pulses=128, target_delay=20e-6, target_doppler=1000.0)
@@ -57,14 +61,14 @@ stack = StackPulses()
 range_comp = RangeCompress()
 doppler_comp = DopplerCompress(window='hann')
 
-# Single SignalData object flows through graph
-signal = gen()                    # Generate signal
-signal = stack(signal)            # Stack pulses
-signal = range_comp(signal)       # Range compression
-signal = doppler_comp(signal)     # Doppler compression
+# GraphData object flows through operations
+gdata = gen()                    # Generate signal
+gdata = stack(gdata)             # Stack pulses
+gdata = range_comp(gdata)        # Range compression
+gdata = doppler_comp(gdata)      # Doppler compression
 
 # Result is a range-doppler map!
-range_doppler_map = signal.data
+range_doppler_map = gdata.data
 ```
 
 ### Using Graph for Better Organization
@@ -86,6 +90,112 @@ result = (Graph("Radar")
 rdm = result.data
 ```
 
+### Parameter Exploration with Variants
+
+```python
+# Explore different window functions
+graph = (Graph("Radar")
+    .add(LFMGenerator(num_pulses=128))
+    .add(StackPulses())
+    .add(RangeCompress())
+    .variant(lambda w: DopplerCompress(window=w),
+             configs=['hann', 'hamming', 'blackman'],
+             names=['Hann', 'Hamming', 'Blackman'])
+)
+
+# Run all variants
+results = graph.run()
+
+# Results is a list of (params, result) tuples
+for params, result in results:
+    print(f"Window: {params['variant'][0]}")
+```
+
+### Branching and Merging
+
+Use branches when you want to run multiple parallel processing paths that may
+use identical port names. After processing, use `.merge()` with a custom
+merge function to combine branch outputs into a single `GraphData`.
+
+The merge function receives a `BranchesView` (ordered) which supports both
+name-based (`branches['name']`) and index-based (`branches[0]`) access so
+blocks don't need to know the branch names.
+
+```python
+# Example: compare two branches and merge their outputs
+from sigexec import Graph, GraphData
+from sigexec.blocks import LFMGenerator, StackPulses, RangeCompress, DopplerCompress
+
+def compare_merge(branches):
+    # index-based access is convenient and ordered
+    a = branches[0].data
+    b = branches[1].data
+
+    out = GraphData()
+    out.data = np.concatenate([a, b])
+    out.set('compared', True)
+    return out
+
+graph = (Graph("CompareWindows")
+    .add(LFMGenerator())
+    .add(StackPulses())
+    .add(RangeCompress())
+    .branch(['hann', 'hamming'])
+    .add(DopplerCompress(window='hann'), branch='hann')
+    .add(DopplerCompress(window='hamming'), branch='hamming')
+    .merge(compare_merge)
+)
+
+result = graph.run(GraphData())
+print(result.get('compared'))
+```
+
+
+```python
+# Explore different window functions
+graph = (Graph("Radar")
+    .add(LFMGenerator(num_pulses=128))
+    .add(StackPulses())
+    .add(RangeCompress())
+    .variant(lambda w: DopplerCompress(window=w),
+             configs=['hann', 'hamming', 'blackman'],
+             names=['Hann', 'Hamming', 'Blackman'])
+)
+
+# Visualize the graph structure
+print(graph.visualize())
+# Shows:
+#   Graph: Radar
+#   1. Op0
+#   2. Op1
+#   3. Op2
+#   4. VARIANT: variants
+#      ├─ Hann
+#      ├─ Hamming
+#      ├─ Blackman
+#   Total operations: 4
+#   Variant combinations: 3
+#   Note: Each variant executes with its own isolated GraphData
+
+# Run all variants
+results = graph.run()
+
+# Results is a list of (params, result) tuples
+for params, result in results:
+    print(f"Window: {params['variant'][0]}")
+    # Each result has its own isolated ports
+```
+
+### Visualizing Graphs
+
+```python
+# Check graph structure before running
+graph = Graph("MyPipeline")
+graph.add(operation1).add(operation2)
+print(graph.visualize())  # See operation sequence
+print(repr(graph))        # Quick summary
+```
+
 ### Running Examples
 
 ```bash
@@ -104,17 +214,17 @@ python examples/input_variants_demo.py
 
 ### Core Components
 
-#### SignalData
+#### GraphData
 A data class that wraps signal arrays with metadata:
 ```python
 @dataclass
-class SignalData:
+class GraphData:
     data: np.ndarray          # Signal data
     sample_rate: float        # Sampling rate
     metadata: Dict[str, Any]  # Additional information
 ```
 
-**Key Point**: Every processing block takes `SignalData` as input and returns `SignalData` as output, enabling clean composition.
+**Key Point**: Every processing block takes `GraphData` as input and returns `GraphData` as output, enabling clean composition.
 
 #### Data Class Blocks (Recommended)
 
@@ -128,7 +238,7 @@ gen = LFMGenerator(num_pulses=128, target_delay=20e-6)
 stack = StackPulses()
 compress = RangeCompress()
 
-# Call them directly - each returns SignalData
+# Call them directly - each returns GraphData
 signal = gen()
 signal = stack(signal)
 signal = compress(signal)
@@ -155,7 +265,7 @@ graph = (Graph("MyPipeline")
 
 ### Processing Blocks
 
-All blocks follow the pattern: `SignalData → Block → SignalData`
+All blocks follow the pattern: `GraphData → Block → GraphData`
 
 #### LFMGenerator
 Generates LFM radar signals with configurable parameters:
@@ -171,7 +281,7 @@ gen = LFMGenerator(
     target_delay=20e-6,
     target_doppler=1000.0
 )
-signal = gen()  # Returns SignalData
+signal = gen()  # Returns GraphData
 ```
 
 #### StackPulses
@@ -203,7 +313,7 @@ sigexec/
 │   ├── __init__.py
 │   ├── core/
 │   │   ├── __init__.py
-│   │   ├── data.py          # SignalData class
+│   │   ├── data.py          # GraphData class
 │   │   └── graph.py      # Graph with fluent interface
 │   └── blocks/
 │       ├── __init__.py
@@ -269,7 +379,7 @@ result = process(LFMGenerator()())
 
 ```python
 from dataclasses import dataclass
-from sigexec import SignalData
+from sigexec import GraphData
 
 @dataclass
 class MyCustomBlock:
@@ -278,14 +388,14 @@ class MyCustomBlock:
     param1: float = 1.0
     param2: str = 'default'
     
-    def __call__(self, signal_data: SignalData) -> SignalData:
+    def __call__(self, signal_data: GraphData) -> GraphData:
         """Process the signal."""
         processed_data = your_algorithm(signal_data.data, self.param1)
         
         metadata = signal_data.metadata.copy()
         metadata['my_processing'] = True
         
-        return SignalData(
+        return GraphData(
             data=processed_data,
             sample_rate=signal_data.sample_rate,
             metadata=metadata
@@ -324,7 +434,7 @@ result = (Graph("MyPipeline")
 ## Design Philosophy
 
 1. **Framework First**: SigExec provides the framework; you provide the blocks
-2. **Type Safety**: Same type (`SignalData`) throughout the graph
+2. **Type Safety**: Same type (`GraphData`) throughout the graph
 3. **Composability**: Blocks can be combined in any order
 4. **Extensibility**: Easy to create and distribute custom blocks
 5. **Clarity**: Configuration separate from execution

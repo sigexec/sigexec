@@ -4,28 +4,34 @@ Pytest configuration and shared fixtures.
 
 import numpy as np
 import pytest
-from sigexec import SignalData, Graph
+from sigexec import GraphData, Graph
 
 
 @pytest.fixture
 def simple_signal():
     """Simple 1D signal for testing."""
-    return SignalData(np.array([1.0, 2.0, 3.0, 4.0, 5.0]))
+    gdata = GraphData()
+    gdata.data = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
+    return gdata
 
 
 @pytest.fixture
-def signal_with_metadata():
-    """Signal with metadata for testing."""
-    return SignalData(
-        np.array([1.0, 2.0, 3.0]),
-        metadata={'sample_rate': 1000.0, 'units': 'volts'}
-    )
+def signal_with_ports():
+    """Signal with ports for testing."""
+    gdata = GraphData()
+    gdata.data = np.array([1.0, 2.0, 3.0])
+    gdata.sample_rate = 1000.0
+    gdata.units = 'volts'
+    return gdata
 
 
 @pytest.fixture
 def complex_signal():
     """Complex-valued signal for testing."""
-    return SignalData(np.array([1+2j, 3+4j, 5+6j]))
+    gdata = GraphData()
+    gdata.data = np.array([1+2j, 3+4j, 5+6j])
+    return gdata
+
 
 
 @pytest.fixture

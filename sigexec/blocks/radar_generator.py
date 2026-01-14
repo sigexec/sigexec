@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 import numpy as np
-from ..core.data import SignalData
+from ..core.data import GraphData
 
 
 @dataclass
@@ -22,8 +22,11 @@ class LFMGenerator:
     target_doppler: float = 1000.0
     noise_power: float = 0.1
     
-    def __call__(self, signal_data: SignalData = None) -> SignalData:
+    def __call__(self, gdata: GraphData = None) -> GraphData:
         """Generate the LFM signal."""
+        if gdata is None:
+            gdata = GraphData()
+        
         samples_per_pulse = int(self.pulse_duration * self.sample_rate)
         chirp_rate = self.bandwidth / self.pulse_duration
         
@@ -59,20 +62,18 @@ class LFMGenerator:
                      1j * np.random.randn(samples_per_window)) * np.sqrt(self.noise_power / 2)
             signal_matrix[pulse_idx, :] += noise
         
-        return SignalData(
-            data=signal_matrix,
-            metadata={
-                'sample_rate': self.sample_rate,
-                'num_pulses': self.num_pulses,
-                'pulse_duration': self.pulse_duration,
-                'pulse_repetition_interval': self.pulse_repetition_interval,
-                'bandwidth': self.bandwidth,
-                'carrier_freq': self.carrier_freq,
-                'target_delay': self.target_delay,
-                'target_doppler': self.target_doppler,
-                'samples_per_pulse': samples_per_pulse,
-                'samples_per_window': samples_per_window,
-                'chirp_rate': chirp_rate,
-                'reference_pulse': reference_pulse,
-            }
-        )
+        result = gdata
+        result.data = signal_matrix
+        result.sample_rate = self.sample_rate
+        result.num_pulses = self.num_pulses
+        result.pulse_duration = self.pulse_duration
+        result.pulse_repetition_interval = self.pulse_repetition_interval
+        result.bandwidth = self.bandwidth
+        result.carrier_freq = self.carrier_freq
+        result.target_delay = self.target_delay
+        result.target_doppler = self.target_doppler
+        result.samples_per_pulse = samples_per_pulse
+        result.samples_per_window = samples_per_window
+        result.chirp_rate = chirp_rate
+        result.reference_pulse = reference_pulse
+        return result

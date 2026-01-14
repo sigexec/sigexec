@@ -4,7 +4,7 @@ Pytest unit tests for core Graph functionality.
 
 import numpy as np
 import pytest
-from sigexec import Graph, SignalData
+from sigexec import Graph, GraphData
 
 
 class TestGraphCreation:
@@ -29,7 +29,7 @@ class TestGraphCreation:
         
     def test_create_with_input_data(self):
         """Test creating graph with initial data."""
-        data = SignalData(np.array([1, 2, 3]))
+        data = GraphData(np.array([1, 2, 3]))
         p = Graph(input_data=data)
         assert p._input_data is data
 
@@ -42,7 +42,7 @@ class TestGraphAdd:
         p = Graph()
         
         def multiply_by_2(sig):
-            return SignalData(sig.data * 2, metadata=sig.metadata.copy())
+            return GraphData(sig.data * 2, metadata=sig.metadata.copy())
         
         p.add(multiply_by_2)
         
@@ -80,7 +80,7 @@ class TestGraphRun:
     
     def test_run_empty_pipeline(self):
         """Test running graph with no operations."""
-        data = SignalData(np.array([1, 2, 3]))
+        data = GraphData(np.array([1, 2, 3]))
         p = Graph()
         result = p.run(data)
         
@@ -88,10 +88,10 @@ class TestGraphRun:
         
     def test_run_single_operation(self):
         """Test running graph with one operation."""
-        data = SignalData(np.array([1.0, 2.0, 3.0]))
+        data = GraphData(np.array([1.0, 2.0, 3.0]))
         
         def multiply_by_2(sig):
-            return SignalData(sig.data * 2, metadata=sig.metadata.copy())
+            return GraphData(sig.data * 2, metadata=sig.metadata.copy())
         
         p = Graph()
         p.add(multiply_by_2)
@@ -102,13 +102,13 @@ class TestGraphRun:
         
     def test_run_multiple_operations(self):
         """Test running graph with multiple operations."""
-        data = SignalData(np.array([1.0, 2.0, 3.0]))
+        data = GraphData(np.array([1.0, 2.0, 3.0]))
         
         def add_10(sig):
-            return SignalData(sig.data + 10, metadata=sig.metadata.copy())
+            return GraphData(sig.data + 10, metadata=sig.metadata.copy())
         
         def multiply_by_2(sig):
-            return SignalData(sig.data * 2, metadata=sig.metadata.copy())
+            return GraphData(sig.data * 2, metadata=sig.metadata.copy())
         
         p = Graph()
         p.add(add_10).add(multiply_by_2)
@@ -120,10 +120,10 @@ class TestGraphRun:
         
     def test_run_with_input_data(self):
         """Test running graph with input_data set."""
-        data = SignalData(np.array([5.0]))
+        data = GraphData(np.array([5.0]))
         
         p = Graph(input_data=data)
-        p.add(lambda sig: SignalData(sig.data * 3, metadata=sig.metadata.copy()))
+        p.add(lambda sig: GraphData(sig.data * 3, metadata=sig.metadata.copy()))
         
         result = p.run()  # No argument needed
         assert result.data[0] == 15.0
@@ -143,12 +143,12 @@ class TestGraphCaching:
         
         def counting_op(sig):
             call_count['count'] += 1
-            return SignalData(sig.data * 2, metadata=sig.metadata.copy())
+            return GraphData(sig.data * 2, metadata=sig.metadata.copy())
         
         p = Graph()
         p.add(counting_op)
         
-        data = SignalData(np.array([1.0]))
+        data = GraphData(np.array([1.0]))
         
         # First run
         p.run(data)
@@ -164,12 +164,12 @@ class TestGraphCaching:
         
         def counting_op(sig):
             call_count['count'] += 1
-            return SignalData(sig.data * 2, metadata=sig.metadata.copy())
+            return GraphData(sig.data * 2, metadata=sig.metadata.copy())
         
         p = Graph(enable_cache=False)
         p.add(counting_op)
         
-        data = SignalData(np.array([1.0]))
+        data = GraphData(np.array([1.0]))
         
         # Run twice
         p.run(data)
@@ -180,9 +180,9 @@ class TestGraphCaching:
     def test_clear_cache(self):
         """Test clearing global cache."""
         p1 = Graph()
-        p1.add(lambda sig: SignalData(sig.data * 2, metadata=sig.metadata.copy()))
+        p1.add(lambda sig: GraphData(sig.data * 2, metadata=sig.metadata.copy()))
         
-        data = SignalData(np.array([1.0]))
+        data = GraphData(np.array([1.0]))
         p1.run(data)
         
         # Clear cache
@@ -198,11 +198,11 @@ class TestGraphInputData:
     
     def test_input_data_method(self):
         """Test setting input data via method."""
-        data = SignalData(np.array([7.0]))
+        data = GraphData(np.array([7.0]))
         
         p = Graph()
         p.input_data(data)
-        p.add(lambda sig: SignalData(sig.data * 2, metadata=sig.metadata.copy()))
+        p.add(lambda sig: GraphData(sig.data * 2, metadata=sig.metadata.copy()))
         
         result = p.run()
         assert result.data[0] == 14.0
@@ -210,7 +210,7 @@ class TestGraphInputData:
     def test_input_data_returns_self(self):
         """Test that input_data returns self for chaining."""
         p = Graph()
-        data = SignalData(np.array([1.0]))
+        data = GraphData(np.array([1.0]))
         result = p.input_data(data)
         
         assert result is p
@@ -222,13 +222,13 @@ class TestGraphHelperMethods:
     def test_map_alias(self):
         """Test that map is alias for add."""
         p = Graph()
-        p.map(lambda sig: SignalData(sig.data * 2, metadata=sig.metadata.copy()))
+        p.map(lambda sig: GraphData(sig.data * 2, metadata=sig.metadata.copy()))
         
         assert len(p.operations) == 1
         
     def test_transform(self):
         """Test transform method that operates on data array."""
-        data = SignalData(np.array([1.0, 2.0, 3.0]))
+        data = GraphData(np.array([1.0, 2.0, 3.0]))
         
         p = Graph()
         p.transform(lambda arr: arr * 10)
@@ -244,12 +244,12 @@ class TestGraphHelperMethods:
         def inspector(sig):
             inspected_values.append(sig.data.copy())
         
-        data = SignalData(np.array([1.0, 2.0]))
+        data = GraphData(np.array([1.0, 2.0]))
         
         p = Graph()
-        p.add(lambda sig: SignalData(sig.data * 2, metadata=sig.metadata.copy()))
+        p.add(lambda sig: GraphData(sig.data * 2, metadata=sig.metadata.copy()))
         p.tap(inspector)
-        p.add(lambda sig: SignalData(sig.data + 10, metadata=sig.metadata.copy()))
+        p.add(lambda sig: GraphData(sig.data + 10, metadata=sig.metadata.copy()))
         
         result = p.run(data)
         

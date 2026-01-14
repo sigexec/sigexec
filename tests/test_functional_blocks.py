@@ -3,7 +3,7 @@ Tests for the functional/data class blocks.
 """
 
 import numpy as np
-from sigexec import SignalData, Graph
+from sigexec import GraphData, Graph
 from sigexec.blocks import (
     LFMGenerator,
     StackPulses,
@@ -28,9 +28,9 @@ def test_lfm_generator():
     # Call as function
     signal = gen()
     
-    assert isinstance(signal, SignalData)
+    assert isinstance(signal, GraphData)
     assert signal.shape[0] == 32
-    assert 'reference_pulse' in signal.metadata
+    assert signal.has_port('reference_pulse')
     
     print("  ✓ LFMGenerator tests passed")
 
@@ -40,14 +40,14 @@ def test_stack_pulses():
     print("Testing StackPulses...")
     
     data = np.random.randn(16, 32) + 1j * np.random.randn(16, 32)
-    sig = SignalData(data=data, metadata={'sample_rate': 1e6})
+    sig = GraphData(data=data, metadata={'sample_rate': 1e6})
     
     stack = StackPulses()
     result = stack(sig)
     
-    assert isinstance(result, SignalData)
+    assert isinstance(result, GraphData)
     assert result.shape == data.shape
-    assert result.metadata['pulse_stacked'] == True
+    assert result.pulse_stacked == True
     
     print("  ✓ StackPulses tests passed")
 
@@ -62,7 +62,7 @@ def test_range_compress():
     data = np.random.randn(num_pulses, num_samples) + 1j * np.random.randn(num_pulses, num_samples)
     reference_pulse = np.random.randn(pulse_length) + 1j * np.random.randn(pulse_length)
     
-    sig = SignalData(
+    sig = GraphData(
         data=data,
         metadata={
             'sample_rate': 1e6,
@@ -73,11 +73,11 @@ def test_range_compress():
     compress = RangeCompress()
     result = compress(sig)
     
-    assert isinstance(result, SignalData)
+    assert isinstance(result, GraphData)
     # With 'same' mode: output length = num_samples (maintains input length)
     expected_output_length = num_samples
     assert result.shape == (num_pulses, expected_output_length)
-    assert result.metadata['range_compressed'] == True
+    assert result.range_compressed == True
     
     print("  ✓ RangeCompress tests passed")
 
@@ -87,7 +87,7 @@ def test_doppler_compress():
     print("Testing DopplerCompress...")
     
     data = np.random.randn(32, 64) + 1j * np.random.randn(32, 64)
-    sig = SignalData(
+    sig = GraphData(
         data=data,
         metadata={
             'sample_rate': 1e6,
@@ -98,10 +98,10 @@ def test_doppler_compress():
     compress = DopplerCompress(window='hann')
     result = compress(sig)
     
-    assert isinstance(result, SignalData)
+    assert isinstance(result, GraphData)
     assert result.shape == data.shape
-    assert result.metadata['doppler_compressed'] == True
-    assert 'doppler_frequencies' in result.metadata
+    assert result.doppler_compressed == True
+    assert result.has_port('doppler_frequencies')
     
     print("  ✓ DopplerCompress tests passed")
 
@@ -111,15 +111,15 @@ def test_to_magnitude_db():
     print("Testing ToMagnitudeDB...")
     
     data = np.random.randn(16, 32) + 1j * np.random.randn(16, 32)
-    sig = SignalData(data=data, metadata={'sample_rate': 1e6})
+    sig = GraphData(data=data, metadata={'sample_rate': 1e6})
     
     to_db = ToMagnitudeDB()
     result = to_db(sig)
     
-    assert isinstance(result, SignalData)
+    assert isinstance(result, GraphData)
     assert result.shape == data.shape
     assert result.dtype == np.float64
-    assert result.metadata['magnitude_db'] == True
+    assert result.magnitude_db == True
     
     print("  ✓ ToMagnitudeDB tests passed")
 
@@ -129,15 +129,15 @@ def test_normalize():
     print("Testing Normalize...")
     
     data = np.random.randn(16, 32) * 10 + 5
-    sig = SignalData(data=data, metadata={'sample_rate': 1e6})
+    sig = GraphData(data=data, metadata={'sample_rate': 1e6})
     
     normalize = Normalize(method='max')
     result = normalize(sig)
     
-    assert isinstance(result, SignalData)
+    assert isinstance(result, GraphData)
     assert result.shape == data.shape
     assert np.max(np.abs(result.data)) <= 1.0
-    assert result.metadata['normalized'] == 'max'
+    assert result.normalized == 'max'
     
     print("  ✓ Normalize tests passed")
 
@@ -157,8 +157,8 @@ def test_direct_chaining():
     signal = compress_range(signal)
     signal = compress_doppler(signal)
     
-    assert isinstance(signal, SignalData)
-    assert signal.metadata['range_doppler_map'] == True
+    assert isinstance(signal, GraphData)
+    assert signal.range_doppler_map == True
     
     print("  ✓ Direct chaining tests passed")
 
@@ -178,8 +178,8 @@ def test_pipeline_with_functional_blocks():
     
     result = graph.run()
     
-    assert isinstance(result, SignalData)
-    assert result.metadata['range_doppler_map'] == True
+    assert isinstance(result, GraphData)
+    assert result.range_doppler_map == True
     
     print("  ✓ Graph with functional blocks tests passed")
 
@@ -197,8 +197,8 @@ def test_inline_composition():
         )
     )
     
-    assert isinstance(result, SignalData)
-    assert result.metadata['doppler_compressed'] == True
+    assert isinstance(result, GraphData)
+    assert result.doppler_compressed == True
     
     print("  ✓ Inline composition tests passed")
 

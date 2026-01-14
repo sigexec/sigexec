@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 import numpy as np
 from scipy import signal as sp_signal
-from ..core.data import SignalData
+from ..core.data import GraphData
 
 
 @dataclass
@@ -17,19 +17,19 @@ class RangeCompress:
     window: str = None
     oversample_factor: int = 1
     
-    def __call__(self, signal_data: SignalData) -> SignalData:
+    def __call__(self, gdata: GraphData) -> GraphData:
         """
         Apply matched filtering for range compression.
         
         If oversample_factor > 1, uses FFT-based processing with zero-padding.
         Otherwise uses time-domain correlation.
         """
-        data = signal_data.data
+        data = gdata.data
         
-        if 'reference_pulse' not in signal_data.metadata:
-            raise ValueError("Reference pulse not found in metadata")
+        if not gdata.has_port('reference_pulse'):
+            raise ValueError("Port 'reference_pulse' is required")
         
-        reference_pulse = signal_data.metadata['reference_pulse']
+        reference_pulse = gdata.reference_pulse
         
         # Apply window to reference pulse if specified
         if self.window is not None and self.window.lower() != 'none':
@@ -84,13 +84,10 @@ class RangeCompress:
                     mode='same'
                 )
         
-        metadata = signal_data.metadata.copy()
-        metadata['range_compressed'] = True
-        metadata['num_range_bins'] = output_length
-        metadata['range_window'] = self.window
-        metadata['range_oversample_factor'] = self.oversample_factor
+        gdata.data = filtered_data
+        gdata.range_compressed = True
+        gdata.num_range_bins = output_length
+        gdata.range_window = self.window
+        gdata.range_oversample_factor = self.oversample_factor
         
-        return SignalData(
-            data=filtered_data,
-            metadata=metadata
-        )
+        return gdata
