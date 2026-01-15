@@ -1114,8 +1114,30 @@ class BranchesView:
         for idx, op in enumerate(self.operations):
             op_type = op.get('type', 'operation')
             
-            # Skip tap operations - they don't affect port flow
+            # Handle tap operations - they pass through all data but should be visualized
             if op.get('is_tap', False):
+                node_id = f"node{idx}"
+                name = op.get('name', f'Op{idx}')
+                consumes = available_ports.copy()
+                produces = available_ports.copy()
+                nodes.append({
+                    'id': node_id,
+                    'name': name,
+                    'func': op.get('func'),
+                    'consumes': consumes,
+                    'produces': produces,
+                    'is_tap': True,
+                })
+                # Create edges for all consumed ports from their actual sources
+                for port in consumes:
+                    src = port_sources.get(port)
+                    edges.append({
+                        'from': src,
+                        'to': node_id,
+                        'ports': {port},
+                    })
+                    # Update source for this port
+                    port_sources[port] = node_id
                 continue
             
             node_id = f"node{idx}"
@@ -1249,6 +1271,7 @@ class BranchesView:
             name = node['name']
             has_variants = node.get('has_variants', False)
             is_tap = node.get('is_tap', False)
+            # Use hexagon shape for operations with variants
             if has_variants:
                 lines.append(f"    {node_id}{{{{{name}}}}}")
             elif is_tap:
