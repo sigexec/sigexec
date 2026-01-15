@@ -165,6 +165,7 @@ graph.add(lambda g: GraphData(g.data, metadata={
 print(graph.to_mermaid())
 ```
 
+
 **Hexagons indicate operations with variants:**
 ```mermaid
 flowchart TD
@@ -172,6 +173,7 @@ flowchart TD
     node1{{Scale}}
     node2{{Offset}}
     node3[Stats]
+    node0 --|data|--> node1
     node1 --|data|--> node2
     node2 --|data|--> node3
 ```

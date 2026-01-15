@@ -1131,26 +1131,27 @@ class Graph:
             
             # Handle variant operations specially
             if has_variants:
-                # Variant operation - just pass through data
+                # Variant operation - pass through all available ports
+                consumes = available_ports.copy()
+                produces = available_ports.copy()
                 nodes.append({
                     'id': node_id,
                     'name': name,
                     'func': None,
-                    'consumes': {'data'},
-                    'produces': {'data'},
+                    'consumes': consumes,
+                    'produces': produces,
                     'has_variants': True,
                 })
-                
-                # Create edge for data flow
-                data_source = port_sources.get('data')
-                edges.append({
-                    'from': data_source,
-                    'to': node_id,
-                    'ports': {'data'},
-                })
-                
-                # Update source for data
-                port_sources['data'] = node_id
+                # Create edges for all consumed ports from their actual sources
+                for port in consumes:
+                    src = port_sources.get(port)
+                    edges.append({
+                        'from': src,
+                        'to': node_id,
+                        'ports': {port},
+                    })
+                    # Update source for this port
+                    port_sources[port] = node_id
                 continue
             
             # Skip non-operation types (branch/merge)
@@ -1200,7 +1201,7 @@ class Graph:
                 'produces': produces,
                 'has_variants': has_variants,
             })
-            
+
             # Create edges based on port sources
             # Group consumed ports by their source
             ports_by_source = {}
@@ -1209,21 +1210,26 @@ class Graph:
                 if src not in ports_by_source:
                     ports_by_source[src] = set()
                 ports_by_source[src].add(port)
-            
+
             for src_node, ports in ports_by_source.items():
                 edges.append({
                     'from': src_node,
                     'to': node_id,
                     'ports': ports,
                 })
-            
+
             # Update available ports and sources
             bypass_ports = available_ports - consumes
             available_ports = produces | bypass_ports
-            
+
+            # Always update port_sources for all produced ports
             for port in produces:
                 port_sources[port] = node_id
-            # Bypass ports keep their original sources
+            # For the very first operation, ensure all available ports have a source
+            if idx == 0:
+                for port in available_ports:
+                    if port_sources.get(port) is None:
+                        port_sources[port] = node_id
         
         return {'nodes': nodes, 'edges': edges}
     
