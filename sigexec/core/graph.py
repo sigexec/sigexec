@@ -1151,12 +1151,12 @@ class Graph:
         for idx, op in enumerate(self.operations):
             op_type = op.get('type', 'operation')
             
-            # Handle tap operations - they pass through all data but should be visualized
+            # Handle tap operations - they observe data without consuming it
             if op.get('is_tap', False):
                 node_id = f"node{idx}"
                 name = op.get('name', f'Op{idx}')
-                consumes = available_ports.copy()
-                produces = available_ports.copy()
+                consumes = set()  # Taps don't consume ports - they're side effects
+                produces = set()  # Taps don't produce ports
                 nodes.append({
                     'id': node_id,
                     'name': name,
@@ -1165,16 +1165,15 @@ class Graph:
                     'produces': produces,
                     'is_tap': True,
                 })
-                # Create edges for all consumed ports from their actual sources
-                for port in consumes:
+                # Create edges showing what data is available at this tap point
+                for port in available_ports:
                     src = port_sources.get(port)
                     edges.append({
                         'from': src,
                         'to': node_id,
                         'ports': {port},
                     })
-                    # Update source for this port
-                    port_sources[port] = node_id
+                # Taps don't affect available_ports or port_sources
                 continue
             
             node_id = f"node{idx}"
