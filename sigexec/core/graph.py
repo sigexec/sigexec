@@ -226,7 +226,7 @@ class Graph:
         Returns:
             Self for method chaining
         """
-        op_name = name or f"Op{len(self.operations)}"
+        op_name = name or getattr(operation, '__name__', str(operation))
         
         self.operations.append({
             'name': op_name,
@@ -277,7 +277,7 @@ class Graph:
         # Tap operations shouldn't be cached and don't affect port flow
         self.operations.append({
             'func': wrapper,
-            'name': name or "tap",
+            'name': name or getattr(callback, '__name__', str(callback)),
             'cacheable': False,
             'is_tap': True,  # Mark as tap for special handling
             'type': 'operation'
@@ -333,7 +333,7 @@ class Graph:
         # Tap operations shouldn't be cached and don't affect port flow
         self.operations.append({
             'func': wrapper,
-            'name': name or "tap",
+            'name': name or getattr(callback, '__name__', str(callback)),
             'cacheable': False,
             'is_tap': True,  # Mark as tap for special handling
             'type': 'operation'
