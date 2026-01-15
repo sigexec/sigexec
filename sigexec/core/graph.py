@@ -299,14 +299,22 @@ class Graph:
             callback(signal_data)
             return signal_data
         
-        # Tap operations shouldn't be cached (they're for side effects)
-        return self.add(wrapper, name=name or "tap", cacheable=False)
+        # Tap operations shouldn't be cached and don't affect port flow
+        self.operations.append({
+            'func': wrapper,
+            'name': name or "tap",
+            'cacheable': False,
+            'is_tap': True,  # Mark as tap for special handling
+            'type': 'operation'
+        })
+        return self
     
     def variant(
         self,
         operation_factory: Callable[[Any], Callable[[GraphData], GraphData]],
         configs: List[Any],
-        names: Optional[List[str]] = None
+        names: Optional[List[str]] = None,
+        name: Optional[str] = None
     ) -> 'Graph':
         """
         Add a variant operation that will be explored with multiple configurations.
@@ -318,6 +326,7 @@ class Graph:
             operation_factory: Function that takes a config and returns an operation
             configs: List of configurations to try
             names: Optional names for each variant (defaults to config values as strings)
+            name: Optional name for the variant operation node (defaults to 'variants')
             
         Returns:
             Self for method chaining
@@ -327,10 +336,12 @@ class Graph:
             ...     .add(process_a).add(process_b)
             ...     .variant(lambda w: lambda x: apply_window(x, w), 
             ...               ['hamming', 'hann'],
-            ...               names=['Hamming', 'Hann'])
+            ...               names=['Hamming', 'Hann'],
+            ...               name='Window')
             ...     .variant(lambda thresh: lambda x: threshold(x, thresh), 
             ...               [0.1, 0.2],
-            ...               names=['Low', 'High'])
+            ...               names=['Low', 'High'],
+            ...               name='Threshold')
             ...     .run()
             ... )
             >>> # Returns 4 results: all combinations
@@ -345,7 +356,7 @@ class Graph:
         }
         
         self.operations.append({
-            'name': 'variants',
+            'name': name or 'variants',
             'func': None,  # Will be expanded during run
             'cacheable': True,
             'variant_spec': variant_spec
@@ -502,6 +513,110 @@ class Graph:
         # If the operation returned a raw value (array, scalar, etc.), treat it as data
         return GraphData(data=result, metadata=original_metadata)
     
+    def _execute_from_flow_graph(
+        self,
+        initial_data: Optional[GraphData] = None,
+        verbose: bool = False
+    ) -> GraphData:
+        """
+        Execute the graph based on the port flow graph.
+        
+        This executes operations in order, but passes only the exact ports
+        each operation needs, sourced directly from wherever they were produced.
+        No filter/restore cycles - true efficient execution.
+        
+        Args:
+            initial_data: Initial GraphData (can be None for generators)
+            verbose: Print execution progress
+            
+        Returns:
+            Final GraphData result
+        """
+        # Determine initial ports
+        initial_ports = set(initial_data.ports.keys()) if initial_data else {'data'}
+        
+        # Build flow graph based on actual initial ports
+        flow_graph = self._build_port_flow_graph(initial_ports)
+        
+        # Map node_id -> GraphData result
+        node_results = {}
+        
+        # Track all available ports and their sources (GraphData containing that port)
+        available_ports = {}  # port_name -> GraphData containing that port
+        
+        # Initialize available ports from initial_data
+        if initial_data is not None:
+            for port_name in initial_data.ports.keys():
+                available_ports[port_name] = initial_data
+        
+        # Execute each node in order
+        for idx, op in enumerate(self.operations):
+            # Handle tap operations specially - they don't produce nodes in flow graph
+            if op.get('is_tap', False):
+                # Execute tap callback on current available ports
+                if available_ports:
+                    # Build GraphData with all current ports for inspection
+                    tap_data = GraphData()
+                    for port_name, source_data in available_ports.items():
+                        tap_data.set(port_name, source_data.ports.get(port_name))
+                    
+                    # Execute tap
+                    op['func'](tap_data)
+                continue
+            
+            # Find the corresponding node in flow graph
+            node = None
+            for n in flow_graph['nodes']:
+                if n['id'] == f"node{idx}":
+                    node = n
+                    break
+            
+            if not node:
+                continue
+            
+            node_id = node['id']
+            name = node['name']
+            func = node['func']
+            consumes = node['consumes']
+            
+            if verbose:
+                print(f"Executing: {name}...")
+                if consumes:
+                    print(f"  Consumes: {consumes}")
+            
+            # Build input GraphData with only the ports this operation needs
+            input_data = GraphData()
+            
+            for port_name in consumes:
+                if port_name in available_ports:
+                    source_data = available_ports[port_name]
+                    # Copy the port value from its source
+                    input_data.set(port_name, source_data.ports.get(port_name))
+            
+            # Execute the operation
+            result = func(input_data)
+            node_results[node_id] = result
+            
+            # Update available_ports with all ports from result
+            for port_name in result.ports.keys():
+                available_ports[port_name] = result
+            
+            if verbose and node['produces']:
+                print(f"  Produces: {node['produces']}")
+        
+        # Return the result from the last node, but merge in all ports from all nodes
+        if flow_graph['nodes']:
+            last_node_id = flow_graph['nodes'][-1]['id']
+            final_result = GraphData()
+            
+            # Collect all ports from all available_ports (which tracks latest source of each port)
+            for port_name, source_data in available_ports.items():
+                final_result.set(port_name, source_data.ports.get(port_name))
+            
+            return final_result
+        
+        return initial_data if initial_data is not None else GraphData()
+
     def _execute_with_metadata_optimization(
         self,
         operation: Callable[[GraphData], GraphData],
@@ -742,32 +857,17 @@ class Graph:
         variant_ops = [op for op in self.operations if op.get('variant_spec')]
         
         if not variant_ops:
-            # Simple sequential execution
-            current_data = data
-            
+            # Simple sequential execution using flow graph
             if save_intermediate:
                 self._intermediate_results = []
             
-            for i, op in enumerate(self.operations):
-                cache_key = self._get_cache_key(i)
-                
-                if cache_enabled and op.get('cacheable', True) and cache_key in Graph._global_cache:
-                    if verbose:
-                        print(f"[CACHED] {op['name']}...")
-                    current_data = Graph._global_cache[cache_key]
-                else:
-                    if verbose:
-                        print(f"Executing: {op['name']}...")
-                    current_data = self._execute_with_metadata_optimization(
-                        op['func'], current_data, verbose
-                    )
-                    if cache_enabled and op.get('cacheable', True):
-                        Graph._global_cache[cache_key] = current_data
-                
-                if save_intermediate and current_data is not None:
-                    self._intermediate_results.append(current_data.copy())
+            # Use flow graph execution for efficiency
+            result = self._execute_from_flow_graph(data, verbose)
             
-            return current_data
+            if save_intermediate and result is not None:
+                self._intermediate_results.append(result.copy())
+            
+            return result
 
         # Handle variants: produce the cartesian product of all variant configs
         from itertools import product as _product
@@ -974,9 +1074,162 @@ class Graph:
             return f"Graph('{self.name}'{cache_status}, ops={num_ops}, variants={variant_ops})"
         return f"Graph('{self.name}'{cache_status}, ops={num_ops})"
     
+    def _build_port_flow_graph(self, initial_ports: set) -> Dict[str, Any]:
+        """
+        Analyze the graph to determine actual port flows between operations.
+        
+        This performs static analysis to determine which ports each operation
+        actually accesses, then builds an execution graph showing the real
+        data flow paths including bypass connections.
+        
+        Args:
+            initial_ports: Set of ports available initially (from initial_data)
+        
+        Returns a dictionary representing the execution graph:
+        {
+            'nodes': [
+                {
+                    'id': 'node1',
+                    'name': 'Operation Name',
+                    'func': callable,
+                    'consumes': {'data', 'port1'},  # Ports this operation reads
+                    'produces': {'data', 'port2'},  # Ports this operation writes
+                },
+                ...
+            ],
+            'edges': [
+                {
+                    'from': 'node1',
+                    'to': 'node2', 
+                    'ports': {'data'},  # Ports flowing on this edge
+                },
+                {
+                    'from': 'node1',
+                    'to': 'node3',
+                    'ports': {'reference_pulse'},  # Bypass edge
+                },
+                ...
+            ]
+        }
+        """
+        nodes = []
+        edges = []
+        available_ports = initial_ports.copy() if initial_ports else {'data'}  # Start with initial ports
+        port_sources = {'data': None}  # Track which node produced each port (None = initial)
+        
+        for idx, op in enumerate(self.operations):
+            op_type = op.get('type', 'operation')
+            
+            # Skip tap operations - they don't affect port flow
+            if op.get('is_tap', False):
+                continue
+            
+            node_id = f"node{idx}"
+            name = op.get('name', f'Op{idx}')
+            func = op.get('func')
+            has_variants = bool(op.get('variant_spec'))
+            
+            # Handle variant operations specially
+            if has_variants:
+                # Variant operation - just pass through data
+                nodes.append({
+                    'id': node_id,
+                    'name': name,
+                    'func': None,
+                    'consumes': {'data'},
+                    'produces': {'data'},
+                    'has_variants': True,
+                })
+                
+                # Create edge for data flow
+                data_source = port_sources.get('data')
+                edges.append({
+                    'from': data_source,
+                    'to': node_id,
+                    'ports': {'data'},
+                })
+                
+                # Update source for data
+                port_sources['data'] = node_id
+                continue
+            
+            # Skip non-operation types (branch/merge)
+            if op_type not in ('operation', None):
+                continue
+            
+            if not func:
+                continue
+            
+            # Determine what ports this operation actually needs via static analysis
+            needed_ports = self._analyze_operation_metadata_usage(func, None)
+            if needed_ports is None:
+                # If analysis fails, assume it needs all available ports
+                needed_ports = available_ports.copy()
+            
+            consumes = needed_ports & available_ports  # Only consume what's available
+            
+            # Execute with sample data to determine what it produces
+            try:
+                sample_data = GraphData()
+                for port_name in available_ports:
+                    if port_name == 'data':
+                        sample_data.set(port_name, np.zeros((2, 10), dtype=complex))
+                    else:
+                        sample_data.set(port_name, np.array([1.0]))
+                
+                ports_before = set(sample_data.ports.keys())
+                result = func(sample_data)
+                ports_after = set(result.ports.keys())
+                produces = ports_after - ports_before
+                
+                # If operation accesses 'data', it becomes new source of 'data'
+                if 'data' in consumes:
+                    produces.add('data')
+                    
+            except Exception:
+                # Assume it produces 'data' at minimum
+                produces = {'data'}
+            
+            # Create node
+            has_variants = bool(op.get('variant_spec'))
+            nodes.append({
+                'id': node_id,
+                'name': name,
+                'func': func,
+                'consumes': consumes,
+                'produces': produces,
+                'has_variants': has_variants,
+            })
+            
+            # Create edges based on port sources
+            # Group consumed ports by their source
+            ports_by_source = {}
+            for port in consumes:
+                src = port_sources.get(port)
+                if src not in ports_by_source:
+                    ports_by_source[src] = set()
+                ports_by_source[src].add(port)
+            
+            for src_node, ports in ports_by_source.items():
+                edges.append({
+                    'from': src_node,
+                    'to': node_id,
+                    'ports': ports,
+                })
+            
+            # Update available ports and sources
+            bypass_ports = available_ports - consumes
+            available_ports = produces | bypass_ports
+            
+            for port in produces:
+                port_sources[port] = node_id
+            # Bypass ports keep their original sources
+        
+        return {'nodes': nodes, 'edges': edges}
+    
     def to_mermaid(self, show_ports: bool = True) -> str:
         """
-        Generate a Mermaid flowchart diagram of the graph structure.
+        Generate a Mermaid flowchart diagram based on actual port flow analysis.
         
         Args:
             show_ports: If True, show which ports flow between operations
@@ -984,59 +1237,23 @@ class Graph:
         Returns:
             String containing Mermaid diagram syntax
         """
+        # Build the execution graph showing actual port flows
+        # Use 'data' as default initial port for visualization
+        flow_graph = self._build_port_flow_graph({'data'})
+        
         lines = ["```mermaid", "flowchart TD"]
-        lines.append("    start([Start])")
         
-        # Track node IDs and ports
-        node_id = 0
-        prev_node = "start"
-        branch_nodes = {}  # branch_name -> last_node_id
-        current_ports = set()  # Track available ports at each stage
-        
-        for idx, op in enumerate(self.operations):
-            node_id += 1
-            op_type = op.get('type', 'operation')
-            name = op.get('name', f'Op{idx}')
-            branch = op.get('branch')
-            func = op.get('func')
+        # Add nodes
+        for node in flow_graph['nodes']:
+            node_id = node['id']
+            name = node['name']
+            has_variants = node.get('has_variants', False)
             
-            if op_type == 'branch':
-                # Branch point - create multiple branch paths
-                branches = op.get('branches', [])
-                for br in branches:
-                    branch_nodes[br] = (prev_node, current_ports.copy())
-            elif op_type == 'merge':
-                # Merge point - combine branches
-                node_name = f"node{node_id}"
-                lines.append(f"    {node_name}[{name}]")
-                
-                # Connect from all branches being merged
-                merge_branches = op.get('branches', list(branch_nodes.keys()))
-                for br in merge_branches:
-                    if br in branch_nodes:
-                        br_node, br_ports = branch_nodes[br]
-                        if show_ports and br_ports:
-                            port_str = ', '.join(sorted(br_ports))
-                            lines.append(f"    {br_node} -.{port_str}.-> |{br}| {node_name}")
-                        else:
-                            lines.append(f"    {br_node} -.-> |{br}| {node_name}")
-                
-                prev_node = node_name
-                branch_nodes = {}  # Reset branches after merge
-                # Merge collects all ports from branches
-            elif op_type == 'variants':
-                # Variant node
-                node_name = f"node{node_id}"
-                variant_names = ', '.join(op['variant_spec']['names'])
-                lines.append(f"    {node_name}[/Variant: {variant_names}/]")
-                
-                if show_ports and current_ports:
-                    port_str = ', '.join(sorted(current_ports))
-                    lines.append(f"    {prev_node} --|{port_str}|--> {node_name}")
-                else:
-                    lines.append(f"    {prev_node} --> {node_name}")
-                prev_node = node_name
+            # Use hexagon shape for operations with variants
+            if has_variants:
+                lines.append(f"    {node_id}{{{{{name}}}}}")
             else:
+<<<<<<< HEAD
                 # Regular operation
                 node_name = f"node{node_id}"
                 lines.append(f"    {node_name}[{name}]")
@@ -1108,17 +1325,40 @@ class Graph:
                             current_ports = op_ports.copy()
                     else:
                         current_ports = op_ports.copy()
+=======
+                lines.append(f"    {node_id}[{name}]")
         
-        # End node
-        lines.append("    end_node([End])")
-        if show_ports and current_ports:
-            port_str = ', '.join(sorted(current_ports))
-            lines.append(f"    {prev_node} --|{port_str}|--> end_node")
-        else:
-            lines.append(f"    {prev_node} --> end_node")
+        # Add edges
+        for edge in flow_graph['edges']:
+            from_node = edge['from']
+            to_node = edge['to']
+            ports = edge['ports']
+            
+            if from_node is None:
+                # Skip initial data flow
+                continue
+            
+            if show_ports and ports:
+                port_str = ', '.join(sorted(ports))
+                
+                # Determine if this is a direct edge or bypass edge
+                # Direct edge: from_node is immediately before to_node
+                from_idx = int(from_node.replace('node', ''))
+                to_idx = int(to_node.replace('node', ''))
+                
+                if to_idx == from_idx + 1:
+                    # Direct connection (solid line)
+                    lines.append(f"    {from_node} --|{port_str}|--> {to_node}")
+                else:
+                    # Bypass connection (dotted line)
+                    lines.append(f"    {from_node} -.{port_str}.-> {to_node}")
+            else:
+                lines.append(f"    {from_node} --> {to_node}")
+>>>>>>> a9ce784 (Finalize for release: all tests/demos pass, docs/ready, version workflow-driven)
+        
         lines.append("```")
-        
         return '\n'.join(lines)
+
     
     def visualize(self, filename: str) -> None:
         """

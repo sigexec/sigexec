@@ -2,6 +2,9 @@
 requires = ["setuptools>=45"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools]
+packages = ["sigexec", "sigexec.core", "sigexec.blocks", "sigexec.diagnostics"]
+
 [project]
 name = "sigexec"
 version = "2026.39"

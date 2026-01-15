@@ -5,6 +5,11 @@ Comprehensive radar signal processing graph from LFM generation through
 range-Doppler map creation.
 """
 
+import sys
+import os
+# Use local sigexec code instead of installed package
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import numpy as np
 import pandas as pd
 from sigexec import Graph, GraphData
@@ -68,21 +73,31 @@ def create_dashboard(
     automatically from the graph structure without executing any operations:
     """)
     
-    # Create the graph structure (without running it yet)
+    # Create the graph structure and show port flow visualization
     demo_graph = (Graph("Radar Processing")
         .add(LFMGenerator(num_pulses=num_pulses, target_delay=target_delay, 
+<<<<<<< HEAD
                          target_doppler=target_doppler), name="Generate_LFM")
         .add(StackPulses(), name="Stack_Pulses")
         .add(RangeCompress(window='hamming', oversample_factor=2), 
              name="Range_Compress(hamming, 2x)")
         .add(DopplerCompress(window='hann', oversample_factor=2), 
              name="Doppler_Compress(hann, 2x)"))
+=======
+                         target_doppler=target_doppler), name="Gen")
+        .add(StackPulses(), name="Stack")
+        .add(RangeCompress(window='hamming', oversample_factor=2), name="RangeCompress")
+        .add(DopplerCompress(), name="Doppler"))
+>>>>>>> a9ce784 (Finalize for release: all tests/demos pass, docs/ready, version workflow-driven)
     
-    page.add_syntax(demo_graph.to_mermaid(), language='mermaid')
-    page.add_text("""
-    Each box represents a processing stage. The graph is executed sequentially,
-    with each stage transforming the signal data.
-    """)
+    # Print mermaid diagram to console only
+    mermaid_diagram = demo_graph.to_mermaid()
+    print("\n" + "="*60)
+    print("EXECUTION GRAPH (Port Flow Analysis):")
+    print("="*60)
+    print(mermaid_diagram)
+    print("="*60)
+
     
     # Configuration info - Create pandas DataFrame table
     page.add_header("Configuration", level=2)

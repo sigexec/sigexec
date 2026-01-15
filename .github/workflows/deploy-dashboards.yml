@@ -57,11 +57,13 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -e ".[visualization]"
+          pip install -e ".[visualization]" --index-url https://pypi.org/simple --trusted-host pypi.org --trusted-host files.pythonhosted.org
 
       - name: Generate dashboards
         run: |
-          python examples/publish_demos.py docs || true
+          python examples/radar_processing_demo.py
+          mkdir -p docs
+          cp -r staticdash/* docs/
 
       - name: Detect generated docs
         id: detect_docs

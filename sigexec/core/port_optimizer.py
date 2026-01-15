@@ -125,14 +125,6 @@ class PortAnalyzer:
         `g.ports.get('meta')`). Returns None if analysis cannot determine the
         fields (e.g., dynamic access).
         """
-        """
-        Statically analyze an operation to determine ports access patterns.
-
-        This uses AST parsing to look for both attribute-style accesses (e.g.
-        `g.data`) and explicit ports dict access (e.g. `g.ports['meta']` or
-        `g.ports.get('meta')`). Returns None if analysis cannot determine the
-        fields (e.g., dynamic access).
-        """
         try:
             # Handle callable objects (dataclass instances with __call__)
             target_func = operation
