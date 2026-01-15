@@ -74,21 +74,13 @@ def create_dashboard(
     """)
     
     # Create the graph structure and show port flow visualization
-    demo_graph = (Graph("Radar Processing")
-        .add(LFMGenerator(num_pulses=num_pulses, target_delay=target_delay, 
-<<<<<<< HEAD
-                         target_doppler=target_doppler), name="Generate_LFM")
-        .add(StackPulses(), name="Stack_Pulses")
-        .add(RangeCompress(window='hamming', oversample_factor=2), 
-             name="Range_Compress(hamming, 2x)")
-        .add(DopplerCompress(window='hann', oversample_factor=2), 
-             name="Doppler_Compress(hann, 2x)"))
-=======
-                         target_doppler=target_doppler), name="Gen")
+    demo_graph = (
+        Graph("Radar Processing")
+        .add(LFMGenerator(num_pulses=num_pulses, target_delay=target_delay, target_doppler=target_doppler), name="Gen")
         .add(StackPulses(), name="Stack")
         .add(RangeCompress(window='hamming', oversample_factor=2), name="RangeCompress")
-        .add(DopplerCompress(), name="Doppler"))
->>>>>>> a9ce784 (Finalize for release: all tests/demos pass, docs/ready, version workflow-driven)
+        .add(DopplerCompress(), name="Doppler")
+    )
     
     # Print mermaid diagram to console only
     mermaid_diagram = demo_graph.to_mermaid()
