@@ -102,6 +102,20 @@ class PortAnalyzer:
         return decorator
 
     @staticmethod
+    def produces_ports(*keys: str):
+        """Decorator to explicitly declare which ports an operation produces.
+
+        Usage:
+            @PortAnalyzer.produces_ports('data', 'sample_rate')
+            def op(g):
+                ...
+        """
+        def decorator(func: Callable):
+            setattr(func, '_produced_ports', set(keys))
+            return func
+        return decorator
+
+    @staticmethod
     def analyze_operation_static(operation: Callable) -> Optional[Set[str]]:
         """
         Statically analyze an operation to determine ports access patterns.
@@ -120,13 +134,22 @@ class PortAnalyzer:
         fields (e.g., dynamic access).
         """
         try:
-            source = inspect.getsource(operation)
+            # Handle callable objects (dataclass instances with __call__)
+            target_func = operation
+            if hasattr(operation, '__call__') and not inspect.isfunction(operation) and not inspect.ismethod(operation):
+                # This is likely a callable instance (e.g., dataclass)
+                target_func = operation.__call__
+            
+            source = inspect.getsource(target_func)
+            # Dedent the source in case it's an indented method
+            import textwrap
+            source = textwrap.dedent(source)
             tree = ast.parse(source)
             accessed_keys: Set[str] = set()
 
             # Try to determine the name of the first argument (e.g. 'g' in `def op(g):`)
             try:
-                sig = inspect.signature(operation)
+                sig = inspect.signature(target_func)
                 params = list(sig.parameters.keys())
                 first_param = params[0] if params else None
             except Exception:
@@ -140,8 +163,8 @@ class PortAnalyzer:
                         # prefer attributes accessed on that object; otherwise fall
                         # back to any attribute access (conservative but practical)
                         if first_param is None or node.value.id == first_param:
-                            # Skip infrastructure attributes like 'ports' itself
-                            if node.attr != 'ports':
+                            # Skip infrastructure attributes like 'ports' itself and methods
+                            if node.attr not in ('ports', 'has_port', 'get', 'copy', 'keys', 'values', 'items'):
                                 accessed_keys.add(node.attr)
                     self.generic_visit(node)
 
@@ -183,7 +206,11 @@ class PortAnalyzer:
 
             return accessed_keys if len(accessed_keys) > 0 else None
 
-        except (OSError, TypeError, SyntaxError):
+        except (OSError, TypeError, SyntaxError) as e:
+            logger.debug(f"PortAnalyzer: static analysis failed for {operation}: {e}")
+            return None
+        except Exception as e:
+            logger.debug(f"PortAnalyzer: unexpected error in static analysis for {operation}: {e}")
             return None
 
     @staticmethod

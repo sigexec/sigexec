@@ -1087,9 +1087,27 @@ class Graph:
                         lines.append(f"    {prev_node} --> {node_name}")
                     prev_node = node_name
                     
-                    # Update current_ports based on what the operation produces
-                    # This is approximate - operations can add/modify ports
-                    current_ports = op_ports.copy()
+                    # Update current_ports: try to determine what this operation produces
+                    # by running it with a minimal sample (if optimize_ports is enabled)
+                    if self._optimize_ports and func:
+                        try:
+                            # Create minimal sample with current ports
+                            sample = GraphData()
+                            for port in current_ports:
+                                if port == 'data':
+                                    sample.data = np.zeros(2)
+                                else:
+                                    setattr(sample, port, None)
+                            
+                            # Run the operation
+                            result = func(sample)
+                            # Extract all produced ports
+                            current_ports = set(result.ports.keys())
+                        except Exception:
+                            # If execution fails, keep existing ports
+                            current_ports = op_ports.copy()
+                    else:
+                        current_ports = op_ports.copy()
         
         # End node
         lines.append("    end_node([End])")

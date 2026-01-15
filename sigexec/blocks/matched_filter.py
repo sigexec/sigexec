@@ -1,23 +1,25 @@
 """Matched filter block for range compression."""
 
-from dataclasses import dataclass
 import numpy as np
 from scipy import signal as sp_signal
 from ..core.data import GraphData
 
 
-@dataclass
-class RangeCompress:
+def RangeCompress(window: str = None, oversample_factor: int = 1):
     """
     Performs matched filtering for range compression.
     
     Uses the reference pulse from metadata to perform correlation.
     Supports windowing and oversampling via FFT-based processing.
-    """
-    window: str = None
-    oversample_factor: int = 1
     
-    def __call__(self, gdata: GraphData) -> GraphData:
+    Args:
+        window: Window type ('hann', 'hamming', 'blackman', 'bartlett', or None)
+        oversample_factor: Oversampling factor for FFT-based processing
+    
+    Returns:
+        A function that performs range compression
+    """
+    def range_compress(gdata: GraphData) -> GraphData:
         """
         Apply matched filtering for range compression.
         
@@ -26,36 +28,33 @@ class RangeCompress:
         """
         # Read primary signal from the canonical 'data' port
         data = gdata.data
-
+        
         # Expect reference_pulse to be provided explicitly
-        if not gdata.has_port('reference_pulse'):
-            raise ValueError("Port 'reference_pulse' is required")
-
         reference_pulse = gdata.reference_pulse
         
         # Apply window to reference pulse if specified
-        if self.window is not None and self.window.lower() != 'none':
+        if window is not None and window.lower() != 'none':
             pulse_length = len(reference_pulse)
-            if self.window == 'hann':
+            if window == 'hann':
                 window_func = np.hanning(pulse_length)
-            elif self.window == 'hamming':
+            elif window == 'hamming':
                 window_func = np.hamming(pulse_length)
-            elif self.window == 'blackman':
+            elif window == 'blackman':
                 window_func = np.blackman(pulse_length)
-            elif self.window == 'bartlett':
+            elif window == 'bartlett':
                 window_func = np.bartlett(pulse_length)
             else:
                 import warnings
-                warnings.warn(f"Unknown window type '{self.window}', using rectangular window")
+                warnings.warn(f"Unknown window type '{window}', using rectangular window")
                 window_func = np.ones(pulse_length)
             reference_pulse = reference_pulse * window_func
         
         num_pulses, num_samples = data.shape
         pulse_length = len(reference_pulse)
         
-        if self.oversample_factor > 1:
+        if oversample_factor > 1:
             # FFT-based processing with oversampling via zero-padding
-            nfft = num_samples * self.oversample_factor
+            nfft = num_samples * oversample_factor
             
             # Use complex dtype for correlation output
             output_dtype = np.complex128 if np.iscomplexobj(data) or np.iscomplexobj(reference_pulse) else np.float64
@@ -99,7 +98,9 @@ class RangeCompress:
         gdata.data = filtered_data
         gdata.range_compressed = True
         gdata.num_range_bins = output_length
-        gdata.range_window = self.window
-        gdata.range_oversample_factor = self.oversample_factor
+        gdata.range_window = window
+        gdata.range_oversample_factor = oversample_factor
         
         return gdata
+    
+    return range_compress

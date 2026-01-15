@@ -73,8 +73,10 @@ def create_dashboard(
         .add(LFMGenerator(num_pulses=num_pulses, target_delay=target_delay, 
                          target_doppler=target_doppler), name="Generate_LFM")
         .add(StackPulses(), name="Stack_Pulses")
-        .add(RangeCompress(), name="Range_Compress")
-        .add(DopplerCompress(), name="Doppler_Compress"))
+        .add(RangeCompress(window='hamming', oversample_factor=2), 
+             name="Range_Compress(hamming, 2x)")
+        .add(DopplerCompress(window='hann', oversample_factor=2), 
+             name="Doppler_Compress(hann, 2x)"))
     
     page.add_syntax(demo_graph.to_mermaid(), language='mermaid')
     page.add_text("""
@@ -295,8 +297,32 @@ result = (Graph("Radar")
 
 
 if __name__ == "__main__":
+    # Display graph structure using to_mermaid()
+    print("=" * 80)
+    print("RADAR SIGNAL PROCESSING GRAPH STRUCTURE")
+    print("=" * 80)
+    
+    demo_graph = (Graph("Radar Processing", optimize_ports=True)
+        .add(LFMGenerator(num_pulses=128, target_delay=2e-6, target_doppler=200.0), 
+             name="Generate_LFM")
+        .add(StackPulses(), name="Stack_Pulses")
+        .add(RangeCompress(window='hamming', oversample_factor=2), 
+             name="Range_Compress(hamming, 2x)")
+        .add(DopplerCompress(window='hann', oversample_factor=2), 
+             name="Doppler_Compress(hann, 2x)"))
+    
+    print("\nMermaid Diagram:")
+    print("-" * 80)
+    print(demo_graph.to_mermaid(show_ports=True))
+    print("-" * 80)
+    print("\nThis diagram shows the complete radar signal processing flow.")
+    print("With port optimization, you can see which specific ports each block uses.")
+    print("Copy the mermaid code above to https://mermaid.live for visualization.\n")
+    
     if not STATICDASH_AVAILABLE:
         print("staticdash not available. Install with: pip install staticdash")
+        print("To create the full interactive dashboard, install staticdash:")
+        print("  pip install staticdash")
     else:
         print("Creating radar processing dashboard...")
         dashboard = create_dashboard(
