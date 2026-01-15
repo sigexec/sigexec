@@ -38,10 +38,10 @@ flowchart TD
     node5[Power]
     node0 --|sample_rate|--&gt; node1
     node0 --|data|--&gt; node1
-    node1 --|data|--&gt; node2
-    node1 -.sample_rate.-&gt; node3
+    node0 -.data.-&gt; node2
+    node0 -.sample_rate.-&gt; node3
     node2 --|data|--&gt; node3
-    node3 --|data|--&gt; node4
+    node2 -.data.-&gt; node4
     node4 --|fft|--&gt; node5
 ```</code></pre></div>
             <h2>Example 2: Graph with Branches</h2>
