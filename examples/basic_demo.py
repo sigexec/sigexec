@@ -55,4 +55,28 @@ graph = (Graph("BasicProcessing")
 
 print(graph.to_mermaid())
 
+
+# Staticdash dashboard for publishing
+def create_dashboard():
+    try:
+        import staticdash as sd
+    except ImportError:
+        raise RuntimeError("staticdash is required for dashboard publishing")
+
+    dashboard = sd.Dashboard("Basic sigexec demo")
+    page = sd.Page("basic-demo", "Basic sigexec demo")
+    page.add_header("Basic sigexec demo", level=1)
+    page.add_text("""
+    This demo shows a simple sequential graph with multiply, offset, and stats operations.
+    """)
+    # Show the execution graph
+    graph = (Graph("BasicProcessing")
+        .add(multiply, name="Multiply")
+        .add(add_offset, name="AddOffset")
+        .add(compute_stats, name="ComputeStats"))
+    page.add_header("Execution Graph", level=2)
+    page.add_syntax(graph.to_mermaid(), language="mermaid")
+    dashboard.add_page(page)
+    return dashboard
+
 print("\n✓ Basic demo completed!")

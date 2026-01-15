@@ -75,6 +75,25 @@ print("        Regular operations show as rectangles [Name]")
 print()
 print(graph.to_mermaid())
 
+
+# Staticdash dashboard for publishing
+def create_dashboard():
+    try:
+        import staticdash as sd
+    except ImportError:
+        raise RuntimeError("staticdash is required for dashboard publishing")
+
+    dashboard = sd.Dashboard("Variant demo")
+    page = sd.Page("variant-demo", "Variant demo")
+    page.add_header("Variant demo", level=1)
+    page.add_text("""
+    This demo shows a graph with parameter variants (hexagons in mermaid).
+    """)
+    page.add_header("Execution Graph", level=2)
+    page.add_syntax(graph.to_mermaid(), language="mermaid")
+    dashboard.add_page(page)
+    return dashboard
+
 print("\n[OK] Variant demo completed!")
 print("\nKey visualization:")
 print("  [Rectangle] = Regular operation (single execution)")
