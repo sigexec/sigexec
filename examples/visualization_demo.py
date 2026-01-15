@@ -166,5 +166,70 @@ def average_merge(branches):
     return result
 
 
+def create_dashboard():
+    try:
+        import staticdash as sd
+    except ImportError:
+        raise RuntimeError("staticdash is required for dashboard publishing")
+
+    dashboard = sd.Dashboard("Graph Visualization Demo")
+    page = sd.Page("visualization-demo", "Graph Visualization Demo")
+    page.add_header("Graph Visualization Demo", level=1)
+    page.add_text("""
+    This demo showcases different types of signal processing graphs and their Mermaid visualizations.
+    Notice how tap operations appear as parallelograms (>) and show data flow.
+    """)
+
+    # Example 1: Simple Linear Graph with Taps
+    page.add_header("Example 1: Simple Linear Graph with Taps", level=2)
+    page.add_text("A basic sequential graph with tap operations for inspection.")
+    simple_graph = (Graph("SimpleProcess")
+        .add(generate_signal, name="Generate")
+        .tap(lambda g: print("[TAP] After Generate"), name="Tap_After_Generate")
+        .add(apply_filter_a, name="Filter")
+        .tap(lambda g: print("[TAP] After Filter"), name="Tap_After_Filter")
+        .add(compute_fft, name="FFT")
+        .add(compute_power, name="Power"))
+    page.add_syntax(simple_graph.to_mermaid(), language="mermaid")
+
+    # Example 2: Graph with Branches
+    page.add_header("Example 2: Graph with Branches", level=2)
+    page.add_text("A graph that branches into parallel processing paths.")
+    branched_graph = (Graph("BranchedProcess")
+        .add(generate_signal, name="Generate_Signal")
+        .branch(["filter_a", "filter_b"])
+        .add(apply_filter_a, branch="filter_a", name="Apply_Filter_A")
+        .add(apply_filter_b, branch="filter_b", name="Apply_Filter_B")
+        .add(compute_fft, name="Compute_FFT")
+        .merge(merge_branches, branches=["filter_a", "filter_b"], name="Merge_Results"))
+    page.add_syntax(branched_graph.to_mermaid(), language="mermaid")
+
+    # Example 3: Graph with Variants
+    page.add_header("Example 3: Graph with Variants", level=2)
+    page.add_text("A graph with variant operations that explore multiple parameter combinations.")
+    variant_graph = (Graph("VariantProcess")
+        .add(generate_signal, name="Generate")
+        .variant(
+            lambda w: lambda g: apply_window(g, w),
+            ['hamming', 'hann', 'blackman'],
+            names=['Hamming', 'Hann', 'Blackman']
+        )
+        .add(compute_fft, name="FFT"))
+    page.add_syntax(variant_graph.to_mermaid(), language="mermaid")
+
+    # Legend
+    page.add_header("Visualization Legend", level=2)
+    page.add_text("""
+    - **[Rectangle]** = Regular operation (single execution)
+    - **{{Hexagon}}** = Variant operation (multiple parameter values)
+    - **>Parallelogram<** = Tap operation (side effect for inspection)
+    - **Solid arrows** = Direct data flow
+    - **Dotted arrows** = Bypass data flow
+    """)
+
+    dashboard.add_page(page)
+    return dashboard
+
+
 if __name__ == "__main__":
     main()
