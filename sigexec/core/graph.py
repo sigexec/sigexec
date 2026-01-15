@@ -1248,104 +1248,28 @@ class Graph:
             node_id = node['id']
             name = node['name']
             has_variants = node.get('has_variants', False)
-            
             # Use hexagon shape for operations with variants
             if has_variants:
                 lines.append(f"    {node_id}{{{{{name}}}}}")
             else:
-<<<<<<< HEAD
-                # Regular operation
-                node_name = f"node{node_id}"
-                lines.append(f"    {node_name}[{name}]")
-                
-                # Determine which ports this operation receives
-                if show_ports and func:
-                    if self._optimize_ports:
-                        # With optimization: only ports the operation needs
-                        needed_ports = self._analyze_operation_metadata_usage(func, None)
-                        if needed_ports:
-                            op_ports = current_ports & needed_ports
-                        else:
-                            op_ports = current_ports.copy()
-                    else:
-                        # Without optimization: all ports flow through
-                        op_ports = current_ports.copy()
-                    
-                    # Add 'data' port if it exists (common case)
-                    if 'data' not in current_ports and idx == 0:
-                        current_ports.add('data')
-                        op_ports.add('data')
-                else:
-                    op_ports = current_ports.copy()
-                
-                if branch:
-                    # Operation on a specific branch
-                    if branch in branch_nodes:
-                        br_node, br_ports = branch_nodes[branch]
-                        if show_ports and br_ports:
-                            port_str = ', '.join(sorted(br_ports))
-                            lines.append(f"    {br_node} -.{port_str}.-> |{branch}| {node_name}")
-                        else:
-                            lines.append(f"    {br_node} -.-> |{branch}| {node_name}")
-                        branch_nodes[branch] = (node_name, op_ports)
-                    else:
-                        if show_ports and op_ports:
-                            port_str = ', '.join(sorted(op_ports))
-                            lines.append(f"    {prev_node} -.{port_str}.-> |{branch}| {node_name}")
-                        else:
-                            lines.append(f"    {prev_node} -.-> |{branch}| {node_name}")
-                        branch_nodes[branch] = (node_name, op_ports)
-                else:
-                    # Operation on main path
-                    if show_ports and op_ports:
-                        port_str = ', '.join(sorted(op_ports))
-                        lines.append(f"    {prev_node} --|{port_str}|--> {node_name}")
-                    else:
-                        lines.append(f"    {prev_node} --> {node_name}")
-                    prev_node = node_name
-                    
-                    # Update current_ports: try to determine what this operation produces
-                    # by running it with a minimal sample (if optimize_ports is enabled)
-                    if self._optimize_ports and func:
-                        try:
-                            # Create minimal sample with current ports
-                            sample = GraphData()
-                            for port in current_ports:
-                                if port == 'data':
-                                    sample.data = np.zeros(2)
-                                else:
-                                    setattr(sample, port, None)
-                            
-                            # Run the operation
-                            result = func(sample)
-                            # Extract all produced ports
-                            current_ports = set(result.ports.keys())
-                        except Exception:
-                            # If execution fails, keep existing ports
-                            current_ports = op_ports.copy()
-                    else:
-                        current_ports = op_ports.copy()
-=======
                 lines.append(f"    {node_id}[{name}]")
-        
+
         # Add edges
         for edge in flow_graph['edges']:
             from_node = edge['from']
             to_node = edge['to']
             ports = edge['ports']
-            
+
             if from_node is None:
                 # Skip initial data flow
                 continue
-            
+
             if show_ports and ports:
                 port_str = ', '.join(sorted(ports))
-                
                 # Determine if this is a direct edge or bypass edge
                 # Direct edge: from_node is immediately before to_node
                 from_idx = int(from_node.replace('node', ''))
                 to_idx = int(to_node.replace('node', ''))
-                
                 if to_idx == from_idx + 1:
                     # Direct connection (solid line)
                     lines.append(f"    {from_node} --|{port_str}|--> {to_node}")
@@ -1354,8 +1278,7 @@ class Graph:
                     lines.append(f"    {from_node} -.{port_str}.-> {to_node}")
             else:
                 lines.append(f"    {from_node} --> {to_node}")
->>>>>>> a9ce784 (Finalize for release: all tests/demos pass, docs/ready, version workflow-driven)
-        
+
         lines.append("```")
         return '\n'.join(lines)
 
