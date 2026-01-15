@@ -28,114 +28,120 @@ class BranchesView:
     """
     def __init__(self, ordered: "OrderedDict[str, GraphData]"):
         self._od: "OrderedDict[str, GraphData]" = OrderedDict(ordered)
-        for idx, op in enumerate(self.operations):
-            op_type = op.get('type', 'operation')
+        self._names: List[str] = list(self._od.keys())
 
-            node_id = f"node{idx}"
-            name = op.get('name', f'Op{idx}')
-            func = op.get('func')
-            has_variants = bool(op.get('variant_spec'))
-            is_tap = op.get('is_tap', False)
+    def __getitem__(self, key: Union[int, str]) -> GraphData:
+        """Allow index (0-based) or name lookup."""
+        if isinstance(key, int):
+            return list(self._od.values())[key]
+        return self._od[key]
 
-            if is_tap:
-                # .tap() nodes: do not affect port flow, do not forward outputs, but are visualized
-                nodes.append({
-                    'id': node_id,
-                    'name': name,
-                    'func': func,
-                    'consumes': set(),
-                    'produces': set(),
-                    'has_variants': False,
-                    'is_tap': True,
-                })
-                # Connect from previous node if any
-                if idx > 0:
-                    edges.append({
-                        'from': f"node{idx-1}",
-                        'to': node_id,
-                        'ports': set(),
-                    })
-                continue
+    def __len__(self) -> int:
+        return len(self._od)
 
-            # Handle variant operations specially
-            if has_variants:
-                consumes = available_ports.copy()
-                produces = available_ports.copy()
-                nodes.append({
-                    'id': node_id,
-                    'name': name,
-                    'func': None,
-                    'consumes': consumes,
-                    'produces': produces,
-                    'has_variants': True,
-                })
-                for port in consumes:
-                    src = port_sources.get(port)
-                    edges.append({
-                        'from': src,
-                        'to': node_id,
-                        'ports': {port},
-                    })
-                    port_sources[port] = node_id
-                continue
+    def __iter__(self) -> Iterator[GraphData]:
+        return iter(self._od.values())
 
-            if op_type not in ('operation', None):
-                continue
-            if not func:
-                continue
+    def items(self) -> ItemsView:
+        return self._od.items()
 
-            needed_ports = self._analyze_operation_metadata_usage(func, None)
-            if needed_ports is None:
-                needed_ports = available_ports.copy()
-            consumes = needed_ports & available_ports
+    def keys(self) -> KeysView:
+        return self._od.keys()
 
-            try:
-                sample_data = GraphData()
-                for port_name in available_ports:
-                    if port_name == 'data':
-                        sample_data.set(port_name, np.zeros((2, 10), dtype=complex))
-                    else:
-                        sample_data.set(port_name, np.array([1.0]))
-                ports_before = set(sample_data.ports.keys())
-                result = func(sample_data)
-                ports_after = set(result.ports.keys())
-                produces = ports_after - ports_before
-                if 'data' in consumes:
-                    produces.add('data')
-            except Exception:
-                produces = {'data'}
+    def values(self) -> ValuesView:
+        return self._od.values()
 
-            nodes.append({
-                'id': node_id,
-                'name': name,
-                'func': func,
-                'consumes': consumes,
-                'produces': produces,
-                'has_variants': has_variants,
-            })
+    def names(self) -> List[str]:
+        return list(self._names)
 
-            ports_by_source = {}
-            for port in consumes:
-                src = port_sources.get(port)
-                if src not in ports_by_source:
-                    ports_by_source[src] = set()
-                ports_by_source[src].add(port)
-            for src_node, ports in ports_by_source.items():
-                edges.append({
-                    'from': src_node,
-                    'to': node_id,
-                    'ports': ports,
-                })
+    def as_list(self) -> List[GraphData]:
+        return list(self._od.values())
 
-            bypass_ports = available_ports - consumes
-            available_ports = produces | bypass_ports
-            for port in produces:
-                port_sources[port] = node_id
-            if idx == 0:
-                for port in available_ports:
-                    if port_sources.get(port) is None:
-                        port_sources[port] = node_id
-        return {'nodes': nodes, 'edges': edges}
+    def as_dict(self) -> Dict[str, GraphData]:
+        return dict(self._od)
+
+    def __repr__(self) -> str:
+        return f"BranchesView(names={self.names()})"
+
+
+class Graph:
+    """
+    Fluent graph for signal processing with method chaining and memoization.
+    
+    This class provides a cleaner, more DAG-like interface where you can:
+    - Chain operations fluently
+    - Use lambda functions for custom operations
+    - Modify a single GraphData object through the graph
+    - Specify dependencies implicitly through chaining
+    - Branch graphs with automatic memoization (shared stages run once)
+    - Create variants with different configurations
+    
+    Memoization means if you create two graphs that share common initial stages,
+    those stages only execute once and the result is cached:
+    
+    Example:
+        >>> base = Graph().add(process_a).add(process_b).add(transform)
+        >>> branch1 = base.branch().add(filter_hann)
+        >>> branch2 = base.branch().add(filter_hamming)
+        >>> 
+        >>> # When you run branch1, it executes process_a -> process_b -> transform
+        >>> result1 = branch1.run()
+        >>> 
+        >>> # When you run branch2, it reuses the cached result after transform!
+        >>> result2 = branch2.run()  # Only executes filter_hamming
+    """
+    
+    # Class-level cache shared across all graph instances
+    _global_cache: Dict[str, GraphData] = {}
+    
+    # Class-level cache for metadata analysis results
+    _metadata_analysis_cache: Dict[int, Optional[Set[str]]] = {}
+    
+    def __init__(
+        self, 
+        name: str = "Graph", 
+        enable_cache: bool = True, 
+        input_data: Optional[GraphData] = None,
+        optimize_ports: bool = True,
+        optimize_ports_strict: bool = False
+    ):
+        """
+        Initialize a new graph.
+        
+        Args:
+            name: Optional name for the graph
+            enable_cache: Whether to enable memoization (default: True)
+            input_data: Optional initial data to process
+            optimize_ports: If True, analyzes operations to determine which ports
+                             each operation uses and only passes those ports. Unused ports
+                             bypass operations entirely, enabling implicit branching and
+                             improving memory efficiency (default: True)
+        """
+        self.name = name
+        self.operations: List[Dict[str, Any]] = []
+        self._enable_cache = enable_cache
+        self._intermediate_results: List[GraphData] = []
+        self._parent_pipeline: Optional['Graph'] = None
+        self._input_data = input_data
+        self._optimize_ports = optimize_ports
+        # If True, enforce that functions with a decorator only access declared ports
+        self._optimize_ports_strict = optimize_ports_strict
+    
+    def _get_cache_key(self, up_to_index: int) -> str:
+        """
+        Generate a cache key for operations up to a certain index.
+        
+        Args:
+            up_to_index: Index of operations to include in key
+            
+        Returns:
+            Cache key string
+        """
+        # Create a key based on operation names and their configuration
+        # We use operation names as a simple hash
+        ops_repr = []
+        for i in range(min(up_to_index + 1, len(self.operations))):
+            op = self.operations[i]
             # Try to get a repr of the function
             func_name = op.get('name', f"op{i}")
             ops_repr.append(func_name)
@@ -246,6 +252,37 @@ class BranchesView:
             Self for method chaining
         """
         return self.add(func, name)
+    
+    def tap(
+        self,
+        callback: Callable[[GraphData], None],
+        name: Optional[str] = None
+    ) -> 'Graph':
+        """
+        Add a callback that inspects the signal without modifying it.
+        
+        Useful for debugging, logging, or visualization.
+        
+        Args:
+            callback: Function that receives GraphData but doesn't return anything
+            name: Optional name for this operation
+            
+        Returns:
+            Self for method chaining
+        """
+        def wrapper(signal_data: GraphData) -> GraphData:
+            callback(signal_data)
+            return signal_data
+        
+        # Tap operations shouldn't be cached and don't affect port flow
+        self.operations.append({
+            'func': wrapper,
+            'name': name or "tap",
+            'cacheable': False,
+            'is_tap': True,  # Mark as tap for special handling
+            'type': 'operation'
+        })
+        return self
     
     def transform(
         self,
@@ -1325,7 +1362,7 @@ def create_graph(
     enable_cache: bool = True, 
     input_data: Optional[GraphData] = None,
     optimize_ports: bool = True
-) -> Graph:
+) -> 'Graph':
     """
     Factory function to create a new graph.
     
