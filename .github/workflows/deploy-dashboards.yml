@@ -61,9 +61,7 @@ jobs:
 
       - name: Generate dashboards
         run: |
-          python examples/radar_processing_demo.py
-          mkdir -p docs
-          cp -r staticdash/* docs/
+          python examples/publish_demos.py
 
       - name: Detect generated docs
         id: detect_docs
